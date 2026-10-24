@@ -145,8 +145,9 @@ public:
 #include "tools/compilers/aas/AASFile.h"
 #include "tools/compilers/aas/AASFileManager.h"
 
-// the engine <-> game interface: DUDE's, not Raven's game/Game.h
-#include "framework/Game.h"
+// the engine <-> game interface is DUDE's framework/Game.h; game/Game.h includes it and keeps
+// the game-side definitions Raven had there
+#include "../game/Game.h"
 
 // the game
 #include "../game/Game_local.h"
