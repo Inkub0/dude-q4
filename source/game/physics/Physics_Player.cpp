@@ -1798,6 +1798,13 @@ void idPhysics_Player::Restore( idRestoreGame *savefile ) {
 
 	savefile->ReadInt( (int &)waterLevel );
 	savefile->ReadInt( waterType );
+
+	// DUDE (dhewm3 4bd46b3e, #328): a save made while idPush had rotated the player
+	// (TryRotatePushEntity -> Rotate -> Link) keeps a rotated clip model axis, and the player then
+	// e.g. finds stairs too steep; the player's clip model axis is always the identity otherwise
+	if ( clipModel != NULL ) {
+		clipModel->SetPosition( clipModel->GetOrigin(), mat3_identity );
+	}
 }
 
 /*
