@@ -899,7 +899,7 @@ void idAnim::CallFrameCommands( idEntity *ent, int from, int to ) const {
 // abahr:
 				case FC_EVENTFUNCTION_ARGS: {
 					assert( command.event );
-					ent->ProcessEvent( command.event, (int)command.parmList );
+					ent->ProcessEvent( command.event, command.parmList );
 					break;
 				}
 // bdube: support indirection and simplify

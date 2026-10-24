@@ -1301,7 +1301,7 @@ idGameEdit::LightSetParms
 ================
 */
 void idGameEdit::LightSetParms ( idEntity* ent, int maxLevel, int currentLevel, float radius ) {	
-	int		 data;
+	intptr_t data = 0;		// DUDE: an event argument slot (dhewm3's 64-bit events)
 	idLight* light;
 	
 	// Switch to a light entity
