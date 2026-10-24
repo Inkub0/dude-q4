@@ -157,6 +157,9 @@ idCVar g_forceMarineModel(			"g_forceMarineModel",		"",			CVAR_GAME | CVAR_ARCHI
 
 // RAVEN BEGIN
 // jnewquist: vertical stretch for letterboxed cinematics authored for 4:3 aspect
+// DUDE: Quake 4's engine owned r_aspectRatio (its menu's 0 4:3, 1 16:9, 2 16:10); DUDE's engine has
+// none, so the game holds it, as dhewm3's Doom 3 game does, with -1 = the window's own shape
+idCVar r_aspectRatio(				"r_aspectRatio",			"-1",			CVAR_RENDERER | CVAR_INTEGER | CVAR_ARCHIVE, "aspect ratio of view:\n0 = 4:3\n1 = 16:9\n2 = 16:10\n-1 = auto (from the resolution)", -1, 2 );
 idCVar g_fixedHorizFOV(				"r_fixedHorizFOV",			"0",			CVAR_RENDERER | CVAR_BOOL, "vertical stretch for letterboxed cinematics authored for 4:3 aspect" );
 idCVar g_cinematic(					"g_cinematic",				"1",			CVAR_GAME | CVAR_BOOL, "skips updating entities that aren't marked 'cinematic' '1' during cinematics" );
 idCVar g_cinematicMaxSkipTime(		"g_cinematicMaxSkipTime",	"600",			CVAR_GAME | CVAR_FLOAT, "# of seconds to allow game to run when skipping cinematic.  prevents lock-up when cinematic doesn't end.", 0, 3600 );

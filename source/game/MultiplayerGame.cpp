@@ -3958,7 +3958,8 @@ const char* idMultiplayerGame::HandleGuiCommands( const char *_menuCommand ) {
 
 // RAVEN BEGIN
 // mekberg: set the r_mode.
-			cvarSystem->SetCVarInteger( "r_aspectRatio", 0 );
+			// DUDE: Raven set 4:3 with a 4:3 r_mode for the spec; DUDE keeps the window's shape
+			cvarSystem->SetCVarInteger( "r_aspectRatio", -1 );
 			currentGui->SetStateInt( "r_aspectRatio", 0 );
 			currentGui->HandleNamedEvent( "forceAspect0" );
 			currentGui->SetStateInt( "com_machineSpec", cvarSystem->GetCVarInteger( "com_machineSpec" ) );

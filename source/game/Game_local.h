@@ -688,6 +688,8 @@ public:
 // RAVEN END
 
 	void					CalcFov( float base_fov, float &fov_x, float &fov_y ) const;
+							// DUDE: the view's shape from r_aspectRatio (-1: the window's); false for 4:3
+	bool					GetViewAspect( float &ratio_x, float &ratio_y ) const;
 
 	void					AddEntityToHash( const char *name, idEntity *ent );
 	bool					RemoveEntityFromHash( const char *name, idEntity *ent );

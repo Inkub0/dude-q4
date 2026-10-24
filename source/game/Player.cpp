@@ -3820,7 +3820,8 @@ void idPlayer::EnterCinematic( void ) {
    		cinematicHud->HandleNamedEvent ( "cinematicStart" );
 // RAVEN BEGIN
 // jnewquist: Option to adjust vertical fov instead of horizontal for non 4:3 modes
-		if ( cvarSystem->GetCVarInteger( "r_aspectRatio" ) != 0 ) {
+		float aspectX, aspectY;
+		if ( gameLocal.GetViewAspect( aspectX, aspectY ) ) {		// DUDE: any wide view, the window's by default
 			cinematicHud->HandleNamedEvent ( "hideLetterbox" );
 		}
 // RAVEN END

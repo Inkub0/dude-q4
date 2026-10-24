@@ -3771,6 +3771,40 @@ TIME_THIS_SCOPE("idGameLocal::RunFrame - gameDebug.BeginFrame()");
 
 /*
 ====================
+idGameLocal::GetViewAspect
+
+DUDE: the view's aspect ratio as r_aspectRatio sets it; -1 (the default) takes the window's, square
+pixels assumed. False for 4:3, which CalcFov leaves as authored.
+====================
+*/
+bool idGameLocal::GetViewAspect( float &ratio_x, float &ratio_y ) const {
+	switch ( r_aspectRatio.GetInteger() ) {
+		case -1:
+			ratio_x = renderSystem->GetScreenWidth();
+			ratio_y = renderSystem->GetScreenHeight();
+			if ( ratio_x <= 0.0f || ratio_y <= 0.0f || idMath::Fabs( ratio_x * 3.0f - ratio_y * 4.0f ) < 1.0f ) {
+				ratio_x = 4.0f;
+				ratio_y = 3.0f;
+				return false;
+			}
+			return true;
+		case 1:
+			ratio_x = 16.0f;
+			ratio_y = 9.0f;
+			return true;
+		case 2:
+			ratio_x = 16.0f;
+			ratio_y = 10.0f;
+			return true;
+		default:
+			ratio_x = 4.0f;
+			ratio_y = 3.0f;
+			return false;
+	}
+}
+
+/*
+====================
 idGameLocal::CalcFov
 
 Calculates the horizontal and vertical field of view based on a horizontal field of view and custom aspect ratio
@@ -3790,27 +3824,8 @@ void idGameLocal::CalcFov( float base_fov, float &fov_x, float &fov_y ) const {
 // RAVEN BEGIN
 // jnewquist: Option to adjust vertical fov instead of horizontal for non 4:3 modes
 	if ( g_fixedHorizFOV.GetBool() ) {
-		int aspectChoice = cvarSystem->GetCVarInteger( "r_aspectRatio" );
-		switch( aspectChoice ) {
-		default :
-		case 0 :
-			// 4:3
-			ratio_x = 4.0f;
-			ratio_y = 3.0f;
-			break;
-
-		case 1 :
-			// 16:9
-			ratio_x = 16.0f;
-			ratio_y = 9.0f;
-			break;
-
-		case 2 :
-			// 16:10
-			ratio_x = 16.0f;
-			ratio_y = 10.0f;
-			break;
-		}
+		// DUDE: r_aspectRatio's shape (GetViewAspect), the window's by default
+		GetViewAspect( ratio_x, ratio_y );
 		x = ratio_x / idMath::Tan( base_fov / 360.0f * idMath::PI );
 		y = idMath::ATan( ratio_y, x );
 		fov_y = y * 360.0f / idMath::PI;
@@ -3831,26 +3846,11 @@ void idGameLocal::CalcFov( float base_fov, float &fov_x, float &fov_y ) const {
 		Error( "idGameLocal::CalcFov: bad result" );
 	}
 
-	int aspectChoice = cvarSystem->GetCVarInteger( "r_aspectRatio" );
-	switch( aspectChoice ) {
-	default :
-	case 0 :
+	// DUDE: r_aspectRatio's shape (GetViewAspect), the window's by default
+	if ( !GetViewAspect( ratio_x, ratio_y ) ) {
 		// 4:3
 		fov_x = base_fov;
 		return;
-		break;
-
-	case 1 :
-		// 16:9
-		ratio_x = 16.0f;
-		ratio_y = 9.0f;
-		break;
-
-	case 2 :
-		// 16:10
-		ratio_x = 16.0f;
-		ratio_y = 10.0f;
-		break;
 	}
 
 	y = ratio_y / idMath::Tan( fov_y / 360.0f * idMath::PI );
