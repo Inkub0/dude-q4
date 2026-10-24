@@ -237,7 +237,9 @@ void idTarget_WaitForButton::Think( void ) {
 
 	if ( thinkFlags & TH_THINK ) {
 		player = gameLocal.GetLocalPlayer();
-		if ( player && ( !player->oldButtons & BUTTON_ATTACK ) && ( player->usercmd.buttons & BUTTON_ATTACK ) ) {
+		// DUDE (dhewm3 6d03fac3): !( oldButtons & ATTACK ), not ( !oldButtons ) & ATTACK - the button
+		// press was only seen when no button at all had been held the frame before
+		if ( player && !( player->oldButtons & BUTTON_ATTACK ) && ( player->usercmd.buttons & BUTTON_ATTACK ) ) {
 			player->usercmd.buttons &= ~BUTTON_ATTACK;
 			BecomeInactive( TH_THINK );
 			ActivateTargets( player );
