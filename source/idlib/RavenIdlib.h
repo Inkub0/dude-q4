@@ -578,4 +578,22 @@ private:
 	idLinkList<idMsgQueue>	writeList, readList;
 };
 
+/*
+===============================================================================
+
+	DUDE: the game's asserts report and carry on. Retail Quake 4 shipped with asserts compiled
+	out, and Raven's code trips some of them on paths that work (a savegame's objects created
+	before the entities they attach to); idlib's AssertFailed stops the process. In a debug build
+	each failing assert is logged once per site - the list to work through - and the game goes
+	on as retail did. Only the game's own code uses this; DUDE's idlib and the engine keep theirs.
+
+===============================================================================
+*/
+
+#ifdef _DEBUG
+void rvAssertFailed( const char *file, int line, const char *expression );
+#undef assert
+#define assert( X )			(X) ? 1 : (rvAssertFailed( __FILE__, __LINE__, #X ), 0)
+#endif
+
 #endif /* !__RAVEN_IDLIB_H__ */

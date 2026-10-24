@@ -705,3 +705,36 @@ bool idBitMsgQueue::GetTimestamp( int &timestamp ) {
 
 	return false;
 }
+
+/*
+================
+rvAssertFailed
+
+Once per assert site (file and line), then silent. The file names are string literals, one per
+source file, so the pointer identifies the site with the line.
+================
+*/
+#ifdef _DEBUG
+void rvAssertFailed( const char *file, int line, const char *expression ) {
+	static const int MAX_SITES = 512;
+	static const char *	siteFiles[MAX_SITES];
+	static int			siteLines[MAX_SITES];
+	static int			numSites = 0;
+
+	for ( int i = 0; i < numSites; i++ ) {
+		if ( siteLines[i] == line && siteFiles[i] == file ) {
+			return;
+		}
+	}
+	if ( numSites < MAX_SITES ) {
+		siteFiles[numSites] = file;
+		siteLines[numSites] = line;
+		numSites++;
+	}
+	if ( idLib::common != NULL ) {
+		idLib::common->Warning( "ASSERTION FAILED (continuing): %s(%d): '%s'", file, line, expression );
+	} else {
+		fprintf( stderr, "ASSERTION FAILED (continuing): %s(%d): '%s'\n", file, line, expression );
+	}
+}
+#endif
