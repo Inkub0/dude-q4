@@ -544,12 +544,16 @@ void rvClientEntity::InitDefaultPhysics( const idVec3 &origin, const idMat3 &axi
 		}
 	}
 
-	// DUDE: while a savegame's objects are created the client entity is not there yet; retail
-	// (asserts off) left self NULL until the physics object's own Restore, which reads it
+	// DUDE: while a savegame's objects are created (idRestoreGame::CreateObjects runs the
+	// constructors, hence Spawn) the client entity is not there yet and the spawn args are empty,
+	// so there is no clip model either. Retail (asserts off) set a NULL self and a NULL clip model;
+	// skip both instead of tripping idPhysics_Static's asserts.
 	if ( gameLocal.entities[ENTITYNUM_CLIENT] != NULL ) {
 		defaultPhysicsObj.SetSelf( gameLocal.entities[ENTITYNUM_CLIENT] );
+		defaultPhysicsObj.SetClipModel( clipModel, 1.0f );
+	} else {
+		delete clipModel;
 	}
-	defaultPhysicsObj.SetClipModel( clipModel, 1.0f );
 	defaultPhysicsObj.SetOrigin( origin );
 	defaultPhysicsObj.SetAxis( axis );
 
