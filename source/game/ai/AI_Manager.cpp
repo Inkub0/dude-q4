@@ -52,10 +52,10 @@ void rvAIManager::RunFrame ( void ){
 	if ( ai_speeds.GetBool ( ) && thinkCount > 0 ) {		
 		gameLocal.Printf ( "ai:%6i  n:%2i s:%2i all:%5.2f t:%5.2f e:%5.2f m:%5.f\n", 
 			gameLocal.framenum, thinkCount, simpleThinkCount, 
-			timerThink.Milliseconds(),
-			timerTactical.Milliseconds(),
-			timerFindEnemy.Milliseconds(),
-			timerMove.Milliseconds() );
+			(double)timerThink.Milliseconds(),
+			(double)timerTactical.Milliseconds(),
+			(double)timerFindEnemy.Milliseconds(),
+			(double)timerMove.Milliseconds() );
 	}
 
 	// RAVEN BEGIN

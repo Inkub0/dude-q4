@@ -1031,7 +1031,7 @@ bool idPhysics_RigidBody::Evaluate( int timeStepMSec, int endTimeMSec ) {
 		if ( rb_showTimings->integer == 1 ) {
 			gameLocal.Printf( "%12s: t %1.4f cd %1.4f\n",
 							self->name.c_str(),
-							timer_total.Milliseconds(), timer_collision.Milliseconds() );
+							(double)timer_total.Milliseconds(), (double)timer_collision.Milliseconds() );
 			lastTimerReset = 0;
 		}
 		else if ( rb_showTimings->integer == 2 ) {
@@ -1039,7 +1039,7 @@ bool idPhysics_RigidBody::Evaluate( int timeStepMSec, int endTimeMSec ) {
 			if ( endTimeMSec > lastTimerReset ) {
 				gameLocal.Printf( "rb %d: t %1.4f cd %1.4f\n",
 								numRigidBodies,
-								timer_total.Milliseconds(), timer_collision.Milliseconds() );
+								(double)timer_total.Milliseconds(), (double)timer_collision.Milliseconds() );
 			}
 		}
 		if ( endTimeMSec > lastTimerReset ) {

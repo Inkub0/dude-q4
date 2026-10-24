@@ -3695,8 +3695,8 @@ TIME_THIS_SCOPE("idGameLocal::RunFrame - gameDebug.BeginFrame()");
 		// display how long it took to calculate the current game frame
 		if ( g_frametime.GetBool() ) {
 			Printf( "game %d: all:%.1f th:%.1f ev:%.1f %d ents \n",
-				time, timer_think.Milliseconds() + timer_events.Milliseconds(),
-				timer_think.Milliseconds(), timer_events.Milliseconds(), num );
+				time, (double)timer_think.Milliseconds() + (double)timer_events.Milliseconds(),
+				(double)timer_think.Milliseconds(), (double)timer_events.Milliseconds(), num );
 		}
 
 		// build the return value
@@ -3736,7 +3736,7 @@ TIME_THIS_SCOPE("idGameLocal::RunFrame - gameDebug.BeginFrame()");
 		timer_misc2.Stop();
 
 		if ( g_frametime.GetInteger() > 1 )  {
-			gameLocal.Printf( "misc:%.1f misc2:%.1f\n", timer_misc.Milliseconds(), timer_misc2.Milliseconds() );
+			gameLocal.Printf( "misc:%.1f misc2:%.1f\n", (double)timer_misc.Milliseconds(), (double)timer_misc2.Milliseconds() );
 		}
 		// bdube: let gameDebug know that its not in a game frame anymore
 		gameDebug.EndFrame( );

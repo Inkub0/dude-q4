@@ -6406,20 +6406,20 @@ bool idPhysics_AF::Evaluate( int timeStepMSec, int endTimeMSec ) {
 		if ( af_showTimings.GetInteger() == 1 ) {
 			gameLocal.Printf( "%12s: t %1.4f pc %2d, %1.4f ac %2d %1.4f lcp %1.4f cd %1.4f\n",
 							self->name.c_str(),
-							timer_total.Milliseconds(),
-							numPrimary, timer_pc.Milliseconds(),
-							numAuxiliary, timer_ac.Milliseconds() - timer_lcp.Milliseconds(),
-							timer_lcp.Milliseconds(), timer_collision.Milliseconds() );
+							(double)timer_total.Milliseconds(),
+							numPrimary, (double)timer_pc.Milliseconds(),
+							numAuxiliary, (double)timer_ac.Milliseconds() - (double)timer_lcp.Milliseconds(),
+							(double)timer_lcp.Milliseconds(), (double)timer_collision.Milliseconds() );
 		}
 		else if ( af_showTimings.GetInteger() == 2 ) {
 			numArticulatedFigures++;
 			if ( endTimeMSec > lastTimerReset ) {
 				gameLocal.Printf( "af %d: t %1.4f pc %2d, %1.4f ac %2d %1.4f lcp %1.4f cd %1.4f\n",
 								numArticulatedFigures,
-								timer_total.Milliseconds(),
-								numPrimary, timer_pc.Milliseconds(),
-								numAuxiliary, timer_ac.Milliseconds() - timer_lcp.Milliseconds(),
-								timer_lcp.Milliseconds(), timer_collision.Milliseconds() );
+								(double)timer_total.Milliseconds(),
+								numPrimary, (double)timer_pc.Milliseconds(),
+								numAuxiliary, (double)timer_ac.Milliseconds() - (double)timer_lcp.Milliseconds(),
+								(double)timer_lcp.Milliseconds(), (double)timer_collision.Milliseconds() );
 			}
 		}
 
