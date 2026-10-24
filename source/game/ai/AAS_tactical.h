@@ -22,6 +22,10 @@
 ///////////////////////////////////////////////////////////////////////////////
 struct rvAASTacticalSensor
 {
+	// DUDE: idAI deletes its sensor through this interface; without a virtual destructor the
+	// sensor's own (rvAASTacticalSensorLocal: releases its reserved feature) never ran
+	virtual					~rvAASTacticalSensor() {}
+
 	// Regular Update Function
 	///////////////////////////////////////////////////////////////////////
 	virtual void			Update() = 0;
