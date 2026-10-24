@@ -270,7 +270,7 @@ private:
 	entityNetEvent_t *					end;
 // RAVEN BEGIN
 // jnewquist: Mark memory tags for idBlockAlloc
-	idBlockAlloc<entityNetEvent_t,32,MA_EVENT>	eventAllocator;
+	idBlockAlloc<entityNetEvent_t,32>	eventAllocator;
 // RAVEN END
 };
 
@@ -924,6 +924,7 @@ private:
 
 	idStr					mapFileName;			// name of the map, empty string if no map loaded
 	idMapFile *				mapFile;				// will be NULL during the game unless in-game editing is used
+	bool					mapFileResolved;		// DUDE: mapFile went through Resolve() (Raven's idMapFile::HasBeenResloved)
 	bool					mapCycleLoaded;
 
 	int						spawnCount;
@@ -980,8 +981,8 @@ private:
 	snapshot_t *			clientSnapshots[MAX_CLIENTS+1];
 // RAVEN BEGIN
 // jnewquist: Mark memory tags for idBlockAlloc
-	idBlockAlloc<entityState_t,256,MA_ENTITY> entityStateAllocator;
-	idBlockAlloc<snapshot_t,64,MA_ENTITY> snapshotAllocator;
+	idBlockAlloc<entityState_t,256> entityStateAllocator;
+	idBlockAlloc<snapshot_t,64> snapshotAllocator;
 // RAVEN END
 
 	idEventQueue			eventQueue;

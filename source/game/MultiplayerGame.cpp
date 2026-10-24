@@ -756,8 +756,8 @@ void idMultiplayerGame::ReceiveDeathMessage( idPlayer *attacker, int attackerSco
 		idStr	attackerStr( ( attacker ? gameLocal.userInfo[ attacker->entityNumber ].GetString( "ui_name" ) : "" ) );
 		idStr	victimStr( ( victim ? gameLocal.userInfo[ victim->entityNumber ].GetString( "ui_name" ) : "" ) );
 
-		attackerStr.RemoveEscapes();
-		victimStr.RemoveEscapes();
+		rvStr::RemoveEscapes( attackerStr );
+		rvStr::RemoveEscapes( victimStr );
 
 		message = va ( "%s%s ^r^i%s %s%s",	(attacker ? (attacker->team ? S_COLOR_STROGG : S_COLOR_MARINE) : ""), 
 							attackerStr.c_str(), 
@@ -2850,7 +2850,7 @@ void idMultiplayerGame::CommonRun( void ) {
 	int oldRank = -1;
 	int oldLeadingTeam = -1;
 	bool wasTied = false;
-	int oldHighScore = idMath::INT_MIN;
+	int oldHighScore = INT_MIN;
 
 	if( player && rankedPlayers.Num() ) {
 		if( gameLocal.gameType == GAME_DM ) {
@@ -7004,7 +7004,7 @@ void idMultiplayerGame::JoinTeam( const char* team ) {
 			}
 		}
 
-		int minCount = idMath::INT_MAX;
+		int minCount = INT_MAX;
 		int minCountTeam = -1;
 		for( int i = 0; i < TEAM_MAX; i++ ) {
 			if( teamCount[ i ] < minCount ) {

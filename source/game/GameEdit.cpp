@@ -1393,9 +1393,9 @@ void idGameEdit::MapSave( const char *path ) const {
 	if (mapFile) {
 // RAVEN BEGIN
 // rjohnson: added entity export
-		if (mapFile->HasExportEntities()) {
-			mapFile->WriteExport( (path) ? path : mapFile->GetName() );
-		} else {
+// DUDE: no export entities - DUDE's idMapFile reads and writes the .map alone (Raven's editors
+// exported changed entities to a .export file merged on the next load), so the map is written whole
+		{
 			if ( path ) {
 				mapFile->Write( path, ".map");
 			} else {
@@ -1419,11 +1419,7 @@ void idGameEdit::MapSave( const char *path ) const {
 // RAVEN BEGIN
 // rjohnson: added entity export
 bool idGameEdit::MapHasExportEntities( void ) const {
-	idMapFile *mapFile = gameLocal.GetLevelMap();
-	if (mapFile) {
-		return mapFile->HasExportEntities();
-	}
-	return false;
+	return false;		// DUDE: no export entities (see MapSave)
 }
 // scork: simple query function for the sound editor
 // cdr: changed to also return the full string name of the map file (still compatable as a bool test)

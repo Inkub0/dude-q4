@@ -38,7 +38,7 @@ rvTramGate::~rvTramGate
 ================
 */
 rvTramGate::~rvTramGate() {
-	doorList.RemoveContents( true );
+	rvListRemoveContents( doorList, true );
 }
 
 /*

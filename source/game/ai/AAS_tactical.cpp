@@ -1404,7 +1404,7 @@ void rvAASTacticalSensorLocal::Search()
  	while (searchHeap.Num() && areaVisitCount<MAX_AREAS_TOUCHED && mFeatures.Num()<mFeaturesSearchMax)
 	{
 		rvSortReach	sr = searchHeap[0];
-		searchHeap.HeapPop();
+		rvListHeapPop( searchHeap );
 		if (areaVisit[sr.mAreaNum])
 		{
 			continue;
@@ -1481,7 +1481,7 @@ void rvAASTacticalSensorLocal::Search()
 					sortReach.mDistance		= walkDistanceToFeature;
 					sortReach.mAreaNum		= reach->toAreaNum;
 					sortReach.mReach		= reach;
-					searchHeap.HeapAdd(sortReach);
+					rvListHeapAdd( searchHeap, sortReach );
 				}
 			}
 		}

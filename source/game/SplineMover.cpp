@@ -1678,8 +1678,8 @@ rvTramCar::SpawnDriver
 */
 rvTramCar::~rvTramCar() {
 	SAFE_REMOVE( driver );
-	occupants.RemoveContents( true );
-	weapons.RemoveContents( true );
+	rvListRemoveContents( occupants, true );
+	rvListRemoveContents( weapons, true );
 
 	SAFE_REMOVE( leftDoor );
 	SAFE_REMOVE( rightDoor );

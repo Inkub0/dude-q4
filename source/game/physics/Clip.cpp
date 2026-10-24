@@ -39,7 +39,7 @@ idVec3 vec3_boxEpsilon( CM_BOX_EPSILON, CM_BOX_EPSILON, CM_BOX_EPSILON );
 
 // RAVEN BEGIN
 // jnewquist: Mark memory tags for idBlockAlloc
-idBlockAlloc<clipLink_t, 1024, MA_PHYSICS>	clipLinkAllocator;
+idBlockAlloc<clipLink_t, 1024>	clipLinkAllocator;
 // RAVEN END
 
 typedef enum {

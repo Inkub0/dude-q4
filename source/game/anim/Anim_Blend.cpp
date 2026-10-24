@@ -349,7 +349,7 @@ const char *idAnim::AddFrameCommand( const idDeclModelDef *modelDef, const idLis
 
 		fc.type = FC_EVENTFUNCTION_ARGS;
 		fc.parmList = new idList<idStr>();
-		token.Split( *fc.parmList, ' ' );
+		rvStr::Split( token, *fc.parmList, ' ' );
 		fc.event = idEventDef::FindEvent( (*fc.parmList)[0] );
 		if( !fc.event ) {
 			SAFE_DELETE_PTR( fc.parmList );

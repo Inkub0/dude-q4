@@ -307,6 +307,7 @@ void idGameLocal::Clear( void ) {
 	mapFileNameStripped.Clear();
 // RAVEN END
 	mapFile = NULL;
+	mapFileResolved = false;
 	spawnCount = INITIAL_SPAWN_COUNT;
 	memset( isMapEntity, 0, sizeof( bool ) * MAX_GENTITIES );
 
@@ -643,6 +644,7 @@ void idGameLocal::Shutdown( void ) {
 	// delete the .map file
 	delete mapFile;
 	mapFile = NULL;
+	mapFileResolved = false;
 
 	// free the collision map
 	collisionModelManager->FreeMap( GetMapName() );
@@ -1324,6 +1326,7 @@ void idGameLocal::LoadMap( const char *mapName, int randseed ) {
 // RAVEN BEGIN
 // rjohnson: added resolve for handling func_groups and other aspects.  Before, radiant would do this processing on a map destroying the original data
 		mapFile->Resolve();
+		mapFileResolved = true;
 // RAVEN END
 	}
 	mapFileName = mapFile->GetName();
@@ -2982,7 +2985,7 @@ idPlayer *idGameLocal::GetClientByName( const char *name ) const {
 // RAVEN END
 // RAVEN BEGIN
 // bdube: escape codes
-			if ( idStr::IcmpNoEscape( name, userInfo[ i ].GetString( "ui_name" ) ) == 0 ) {
+			if ( rvStr::IcmpNoEscape( name, userInfo[ i ].GetString( "ui_name" ) ) == 0 ) {
 // RAVEN END			
 				return static_cast<idPlayer *>( ent );
 			}
@@ -3026,7 +3029,7 @@ int idGameLocal::GetClientNumByName( const char *name ) const {
 		ent = entities[ i ];
 
 		if ( ent && ent->IsType( idPlayer::GetClassType() ) ) {
-			if ( idStr::IcmpNoEscape( name, userInfo[ i ].GetString( "ui_name" ) ) == 0 ) {
+			if ( rvStr::IcmpNoEscape( name, userInfo[ i ].GetString( "ui_name" ) ) == 0 ) {
 				return i;
 			}
 		}
@@ -4112,7 +4115,7 @@ idMapFile *idGameLocal::GetLevelMap( void ) {
 // RAVEN BEGIN
 // rhummer: Added the HasBeenResolved check, if resolve has been run then it doesn't have func_groups.
 //			Which we probably don't want, so force the map to be reloaded.
-	if ( mapFile && mapFile->HasPrimitiveData() && !mapFile->HasBeenResloved() ) {
+	if ( mapFile && mapFile->HasPrimitiveData() && !mapFileResolved ) {
 // RAVEN END
 		return mapFile;
 	}
@@ -4125,6 +4128,7 @@ idMapFile *idGameLocal::GetLevelMap( void ) {
 	}
 
 	mapFile = new idMapFile;
+	mapFileResolved = false;
 	if ( !mapFile->Parse( mapFileName ) ) {
 		delete mapFile;
 		mapFile = NULL;

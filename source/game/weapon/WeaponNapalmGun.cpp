@@ -155,7 +155,7 @@ void WeaponNapalmGun::UpdateCylinders(void)
 
 	float ammoInClip = AmmoInClip();
 	float clipSize = ClipSize();
-	if ( clipSize <= idMath::FLOAT_EPSILON ) {
+	if ( clipSize <= idMath::FLT_EPSILON ) {
 		clipSize = maxAmmo;
 	}
 

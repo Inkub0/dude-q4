@@ -61,7 +61,7 @@ sfuReturnType rvScriptFuncUtility::Init( const char* source ) {
 		return SFU_NOFUNC;
 	}
 
-	idStr::Split( source, parms, ' ' );
+	rvStr::Split( source, parms, ' ' );
 	return Init();
 }
 

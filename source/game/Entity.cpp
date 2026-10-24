@@ -4326,7 +4326,7 @@ idEntity::RemoveTargets
 */
 void idEntity::RemoveTargets( bool destroyContents ) {
 	if( destroyContents ) {
-		targets.RemoveContents( true );
+		rvListRemoveContents( targets, true );
 	} else {
 		targets.Clear();
 	}

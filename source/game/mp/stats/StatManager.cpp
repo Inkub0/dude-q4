@@ -884,13 +884,13 @@ void rvStatManager::ClearStats( void ) {
 }
 
 void rvStatManager::CalculateEndGameStats( void ) {
-	int maxKills = idMath::INT_MIN;
+	int maxKills = INT_MIN;
 	int maxKillPlayer = -1;
 
-	int maxSuicides = idMath::INT_MIN;
+	int maxSuicides = INT_MIN;
 	int maxSuicidesPlayer = -1;
 
-	int maxGauntletKills = idMath::INT_MIN;
+	int maxGauntletKills = INT_MIN;
 	int maxGauntletKillsPlayer = -1;
 
 	float maxDamageKillsRatio = 0.0;

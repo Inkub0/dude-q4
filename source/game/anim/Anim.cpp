@@ -134,8 +134,8 @@ bool idMD5Anim::LoadAnim( const char *filename ) {
 	int		version;
 // RAVEN BEGIN
 // jsinger: done this way to minimize amount of code change
-	idAutoPtr<Lexer>	lexer( LexerFactory::MakeLexer(LEXFL_ALLOWPATHNAMES | LEXFL_NOSTRINGESCAPECHARS | LEXFL_NOSTRINGCONCAT) );
-	Lexer &parser(*lexer);
+	// DUDE: an idLexer - Raven's LexerFactory gave a binary-capable lexer when com_binaryRead was set
+	idLexer	parser( LEXFL_ALLOWPATHNAMES | LEXFL_NOSTRINGESCAPECHARS | LEXFL_NOSTRINGCONCAT );
 // RAVEN END
 	idToken	token;
 	int		i, j;
