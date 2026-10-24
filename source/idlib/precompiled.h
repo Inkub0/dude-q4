@@ -114,6 +114,10 @@ public:
 #include "idlib/MapFile.h"
 #include "idlib/Timer.h"
 
+// Raven's idlib types and switches the game uses that never cross into the engine (Raven's
+// AutoPtr, LexerFactory, TextCompiler and AutoCrit are not used by the game code)
+#include "RavenIdlib.h"
+
 // DUDE's engine interfaces (framework, decls, renderer, sound, networking, GUIs, collision, AAS)
 #include "framework/BuildVersion.h"
 #include "framework/BuildDefines.h"
@@ -151,12 +155,6 @@ public:
 
 // the game
 #include "../game/Game_local.h"
-
-// Raven's idlib additions the game code uses
-#include "AutoPtr.h"
-#include "LexerFactory.h"
-#include "TextCompiler.h"
-#include "threads/AutoCrit.h"
 
 #endif	/* __cplusplus */
 

@@ -25,6 +25,8 @@ foreach(line ${vcproj_lines})
 	string(REGEX REPLACE "^\\./" "" path "${path}")
 	list(APPEND q4game_sources "${CMAKE_SOURCE_DIR}/source/${path}")
 endforeach()
+# Raven idlib pieces the game needs and DUDE's idlib does not have (source/idlib/RavenIdlib.h)
+list(APPEND q4game_sources "${CMAKE_SOURCE_DIR}/source/idlib/RavenIdlib.cpp")
 list(LENGTH q4game_sources q4game_count)
 message(STATUS "Quake 4 game: ${q4game_count} sources from game.vcproj")
 
