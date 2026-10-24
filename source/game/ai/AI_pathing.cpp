@@ -948,6 +948,9 @@ bool FindOptimalPath( const idActor* owner, const pathNode_t *root, const obstac
 			seekPos.ToVec2() = root->children[0]->pos;
 		} else if ( root->children[1] ) {
 			seekPos.ToVec2() = root->children[1]->pos;
+		} else {
+			// DUDE (dhewm3 74157006): no children - stay at the root, not the world origin
+			seekPos.ToVec2() = root->pos;
 		}
 	} else if ( !optimizedPathCalculated ) {
 		OptimizePath( root, bestNode, obstacles, numObstacles, optimizedPath );
