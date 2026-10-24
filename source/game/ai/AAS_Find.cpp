@@ -302,7 +302,7 @@ bool rvAASFindGoalForTether::TestArea( class idAAS *aas, int areaNum, const aasA
 
 	// Make sure the area bounds is remotely valid for the tether
 	idBounds tempBounds = area.bounds;
-	tempBounds[1].z = area.ceiling;
+	tempBounds[1].z = aas->AreaCeiling( areaNum );		// DUDE: kept beside the areas
 	if ( !tether->ValidateBounds ( tempBounds ) ) {
 		return false;
 	}

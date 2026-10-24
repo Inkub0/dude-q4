@@ -2653,7 +2653,7 @@ void idAFEntity_SteamPipe::InitSteamRenderEntity( void ) {
 		}
 
 		if ( steamRenderEntity.hModel ) {
-			steamRenderEntity.bounds = steamRenderEntity.hModel->Bounds( &steamRenderEntity );
+			steamRenderEntity.bounds = R_ModelBoundsQ4( steamRenderEntity.hModel, &steamRenderEntity );
 		} else {
 			steamRenderEntity.bounds.Zero();
 		}
@@ -3183,7 +3183,7 @@ idRenderModel *idGameEdit::AF_CreateMesh( const idDict &args, idVec3 &meshOrigin
 	}
 
 	// instantiate a mesh using the joint information from the render entity
-	return md5->InstantiateDynamicModel( &ent, NULL, NULL );
+	return R_InstantiateDynamicModelQ4( md5, &ent );
 }
 
 // RAVEN BEGIN

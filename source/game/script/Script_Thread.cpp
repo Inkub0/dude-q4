@@ -2253,7 +2253,7 @@ idThread::Event_SetMatSort
 void idThread::Event_SetMatSort( const char *name, const char *val ) const {
 	const idMaterial *mat = declManager->FindMaterial( name );
 	if ( mat ) {
-		int srt = SS_DECAL;
+		float srt = SS_DECAL;		// DUDE: float, SS_PREGUI sits between SS_SUBVIEW and SS_GUI
 		if ( idStr::Icmp( val, "SS_MIN" ) == 0 ) {
 			srt = SS_MIN;		
 		} else if ( idStr::Icmp( val, "SS_SUBVIEW" ) == 0 ) {

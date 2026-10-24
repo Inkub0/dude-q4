@@ -3014,7 +3014,7 @@ Clockwise winding with a simple line intersection test
 */
 struct rvWindingBox {
 	idVec3				verts[4];
-	aasArea_t*			areas[4];
+	const aasArea_t*			areas[4];
 	rvObstacle*			obstacles[4];	// CDR_TODO: Should be a list of obstacles for each vertex
 
 
@@ -3124,11 +3124,41 @@ areas that it touches
 */
 struct rvMarker {
 	rvObstacle*			obstacle;
-	aasArea_t*			area;
+	const aasArea_t*			area;
 	rvMarker*			prev;
 	rvMarker*			next;
 };
 rvPool<rvMarker, 255> markerPool;
+
+// DUDE: each AAS area's first obstacle marker. Raven kept it in aasArea_t::firstMarker; DUDE's
+// aasArea_t keeps Doom 3's layout (Doom 3 game libraries read it inline), so the heads are kept
+// here, per AAS file, in the order of the file's areas.
+static idList< idList<rvMarker *> >	areaFirstMarkers;
+
+static rvMarker *&AreaFirstMarker( const aasArea_t *area ) {
+	for ( int i = 0; i < gameLocal.GetNumAAS(); i++ ) {
+		idAAS *aas = gameLocal.GetAAS( i );
+		idAASFile *file = aas ? aas->GetFile() : NULL;
+		if ( file == NULL || file->GetNumAreas() == 0 ) {
+			continue;
+		}
+		const aasArea_t *first = &file->GetArea( 0 );
+		if ( area >= first && area < first + file->GetNumAreas() ) {
+			if ( areaFirstMarkers.Num() <= i ) {
+				areaFirstMarkers.SetNum( i + 1 );
+			}
+			idList<rvMarker *> &heads = areaFirstMarkers[i];
+			if ( heads.Num() != file->GetNumAreas() ) {
+				heads.SetNum( file->GetNumAreas() );
+				memset( heads.Ptr(), 0, heads.Num() * sizeof( rvMarker * ) );
+			}
+			return heads[ area - first ];
+		}
+	}
+	static rvMarker *noArea;
+	noArea = NULL;
+	return noArea;
+}
 
 /*
 =====================
@@ -3147,7 +3177,7 @@ struct rvObstacle {
 
 	rvWindingBox		windings[3];
 	idList<rvMarker*>	markers;
-	idList<aasArea_t*>	areas;
+	idList<const aasArea_t*>	areas;
 
 	/*
 	============
@@ -3193,8 +3223,8 @@ struct rvObstacle {
 			marker = markers[i];
 			assert(marker->obstacle==this);
 
-			if (marker->area->firstMarker==marker) {
-				marker->area->firstMarker = marker->next;
+			if (AreaFirstMarker(marker->area)==marker) {
+				AreaFirstMarker(marker->area) = marker->next;
 			}
 			if (marker->prev) {
 				marker->prev->next = marker->next;
@@ -3247,7 +3277,7 @@ struct rvObstacle {
 	PointInsideArea
 	============
 	*/
-	bool PointInsideArea( const idVec3& point, aasArea_t* area ) {
+	bool PointInsideArea( const idVec3& point, const aasArea_t* area ) {
 		int i, faceNum;
 
 		for ( i = 0; i < area->numFaces; i++ ) {
@@ -3289,14 +3319,14 @@ struct rvObstacle {
 
 			// Fixup Any Existing Linked List (First Marker)
 			//-----------------------------------------------
-			if (marker->area->firstMarker) {
-				marker->area->firstMarker->prev = marker;
-				marker->next			= marker->area->firstMarker;
+			if (AreaFirstMarker(marker->area)) {
+				AreaFirstMarker(marker->area)->prev = marker;
+				marker->next			= AreaFirstMarker(marker->area);
 			}
 
 			// Add This Marker At THe Area's Head
 			//------------------------------------
-			marker->area->firstMarker	= marker;
+			AreaFirstMarker(marker->area)	= marker;
 
 			markers.Append(marker);
 		}
@@ -3312,7 +3342,7 @@ struct rvObstacle {
 	bool Update() {
 		static rvMarker*			marker;
 		static rvObstacle*			obstacle;
-		static aasArea_t*			area;
+		static const aasArea_t*			area;
 		static idVec3				expand;
 		static float				speed;
 		static float				distance;
@@ -3397,7 +3427,7 @@ struct rvObstacle {
 
 				myWinding->areas[v] = NULL;
 				for (a=0; a<areas.Num(); a++) {
-					aasArea_t* area = areas[a];
+					const aasArea_t* area = areas[a];
 					if (PointInsideArea(myVertex, area)) {
 						myWinding->areas[v] = area;
 
@@ -3405,7 +3435,7 @@ struct rvObstacle {
 						// Search This Area For All Obstacles That May Contain This Vertex
 						//-----------------------------------------------------------------
 						obstacle = NULL;
-						for (marker=area->firstMarker; marker; marker=marker->next) {
+						for (marker=AreaFirstMarker(area); marker; marker=marker->next) {
 							if (marker->obstacle->windings[aasFileNum].PointInside(myVertex)) {
 								obstacle = marker->obstacle;
 								break;
@@ -3522,14 +3552,7 @@ struct rvObstacleFinder {
 
 		// Clear All The Marker Pointers In Any Areas
 		//--------------------------------------------
-		for (int i=0; i<gameLocal.GetNumAAS(); i++) {
-			if (gameLocal.GetAAS(i)) {
-				idAASFile* file = gameLocal.GetAAS(i)->GetFile();
-				for (int a=0; a<file->GetNumAreas(); a++) {
-					file->GetArea(a).firstMarker = NULL;
-				}
-			}
-		}
+		areaFirstMarkers.Clear();		// DUDE: the heads are kept beside the areas
 	}
 
 	/*
@@ -3655,7 +3678,7 @@ struct rvObstacleFinder {
 		pulledBack			= false;
 
 
-		for (marker=area->firstMarker; marker; marker=marker->next) {
+		for (marker=AreaFirstMarker(area); marker; marker=marker->next) {
 			if (marker->obstacle==NULL || marker->obstacle==ignoreA || marker->obstacle==ignoreB || marker->obstacle==ignoreC) {
 				continue;
 			}
@@ -3941,8 +3964,8 @@ public:
 
 				// If The Smoothed Position Is Not Blocked By An Obstacle
 				//--------------------------------------------------------
-				aasArea_t* area = &myAAS->GetFile()->GetArea(pathAt.reach->toAreaNum);
-				for (marker=area->firstMarker; marker; marker=marker->next) {
+				const aasArea_t* area = &myAAS->GetFile()->GetArea(pathAt.reach->toAreaNum);
+				for (marker=AreaFirstMarker(area); marker; marker=marker->next) {
 					if (!marker->obstacle || marker->obstacle->entity.GetEntity()==myIgnoreEntity || marker->obstacle->entity.GetEntity()==myIgnoreEntity2) {
 						continue;
 					}
@@ -4502,7 +4525,7 @@ void idAI::RVMasterMove( void ) {
 		move.myArea			= PointReachableAreaNum(move.myPos);
 		myPosMoved			= true;
 	}
-	aasArea_t*					myArea		= &aas->GetFile()->GetArea(move.myArea);
+	const aasArea_t*					myArea		= &aas->GetFile()->GetArea(move.myArea);
 
 	// Update Goal Position And Area
 	//-------------------------------

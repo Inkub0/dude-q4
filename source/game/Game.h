@@ -7,12 +7,14 @@
 	dude-quake4-game: Raven's game/Game.h, split (the original is in the first commit).
 
 	The engine <-> game interface Raven declared here - gameReturn_t, allowReply_t, escReply_t,
-	idGame, refSound_t, idGameEdit, gameImport_t, gameExport_t, GetGameAPI_t - is DUDE's
-	framework/Game.h: this library is loaded by DUDE, through DUDE's interface, which keeps
-	dhewm3's layout. What Raven kept here besides that is game-side and stays, unchanged.
+	idGame, refSound_t, idGameEdit, gameImport_t, gameExport_t, GetGameAPI_t, and the types
+	their calls take (demoState_t, ClientStats_t, userOrigin_t, debugInfoProc_t, saveType_t) -
+	is DUDE's Quake 4 game interface, quake4/GameQ4.h; quake4/GameNamesQ4.h gives the types the
+	names this code uses. What Raven kept here besides that is game-side and stays, unchanged.
 */
 
-#include "framework/Game.h"
+#include "quake4/GameNamesQ4.h"
+#include "../idlib/RavenFramework.h"
 
 // RAVEN BEGIN
 // bgeisler: moved into scripts directory
@@ -21,12 +23,6 @@
 #define SCRIPT_DEFAULT				"scripts/main.script"
 // RAVEN END
 #define SCRIPT_DEFAULTFUNC			"doom_main"
-
-enum demoState_t {
-	DEMO_NONE,
-	DEMO_RECORDING,
-	DEMO_PLAYING
-};
 
 enum demoReliableGameMessage_t {
 	DEMO_RECORD_CLIENTNUM,
@@ -70,24 +66,11 @@ typedef enum {
 class rvClientEffect;
 // RAVEN END
 
-struct ClientStats_t {
-	bool	isLastPredictFrame;
-	bool	isLagged;
-	bool	isNewFrame;
-};
-
-typedef struct userOrigin_s {
-	idVec3	origin;
-	int		followClient;
-} userOrigin_t;
-
 // RAVEN BEGIN
 // bdube: more forward declarations
 class idProgram;
 class idInterpreter;
 class idThread;
-
-typedef void (*debugInfoProc_t) ( const char* classname, const char* name, const char* value, void *userdata );
 // RAVEN END
 
 // RAVEN BEGIN

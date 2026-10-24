@@ -695,7 +695,8 @@ void	rvAASTacticalSensorLocal::Update()
 	const idVec3&	ownerOrigin			= mOwner->GetPhysics()->GetOrigin();
 	int				ownerAreaNum		= mOwnerAI ? mOwnerAI->PointReachableAreaNum ( ownerOrigin ) : aas->PointReachableAreaNum(ownerOrigin, mOwner->GetPhysics()->GetBounds(), (AREA_REACHABLE_WALK|AREA_REACHABLE_FLY) );
 	aasFeature_t*	feature				= 0;
-	aasArea_t&		area				= file->GetArea(ownerAreaNum);
+	int				areaFirstFeature, areaNumFeatures;		// DUDE: the area's run in the feature index
+	file->GetAreaFeatures( ownerAreaNum, areaFirstFeature, areaNumFeatures );
 	idActor*		teammate			= NULL;
 	float			featureDistance		= 0.0f;
 	float			featureDotLeft		= 0.0f;
@@ -723,11 +724,11 @@ void	rvAASTacticalSensorLocal::Update()
 
 	// Search For Features In This Area That Are Close To Owner Origin
 	//-----------------------------------------------------------------
-	if (area.numFeatures)
+	if (areaNumFeatures)
 	{
-		for (int areaFeatureNum=0; areaFeatureNum<area.numFeatures; areaFeatureNum++)
+		for (int areaFeatureNum=0; areaFeatureNum<areaNumFeatures; areaFeatureNum++)
 		{
-			feature				 = & (file->GetFeature(file->GetFeatureIndex(area.firstFeature+areaFeatureNum)));
+			feature				 = & (file->GetFeature(file->GetFeatureIndex(areaFirstFeature+areaFeatureNum)));
 			if (feature!=mNear)
 			{
 				featureDirection	 = feature->Origin();
@@ -1416,11 +1417,13 @@ void rvAASTacticalSensorLocal::Search()
 		// Check For Features Here
 		//-------------------------
 		const aasArea_t& area = file->GetArea(sr.mAreaNum);
-		if (area.numFeatures)
+		int areaFirstFeature, areaNumFeatures;		// DUDE: the area's run in the feature index
+		file->GetAreaFeatures( sr.mAreaNum, areaFirstFeature, areaNumFeatures );
+		if (areaNumFeatures)
 		{
-			for (areaFeatureNum=0; areaFeatureNum<area.numFeatures; areaFeatureNum++)
+			for (areaFeatureNum=0; areaFeatureNum<areaNumFeatures; areaFeatureNum++)
 			{
-				featurePtr		= & (file->GetFeature(file->GetFeatureIndex(area.firstFeature+areaFeatureNum)));
+				featurePtr		= & (file->GetFeature(file->GetFeatureIndex(areaFirstFeature+areaFeatureNum)));
 				featureOrigin	= featurePtr->Origin();
 
 				// If Walk Path Is Valid, Allow From Owner Test To Use Computed Straight Line Distance

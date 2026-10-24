@@ -452,7 +452,7 @@ void idItem::Spawn( void ) {
 		if ( !ent ) {
 			gameLocal.Error( "Item couldn't find owner '%s'", giveTo.c_str() );
 		}
-		PostEventMS( &EV_Touch, 0, ent, NULL );
+		PostEventMS( &EV_Touch, 0, ent, 0 );
 	}
 
 	if ( spawnArgs.GetBool( "spin" ) || gameLocal.isMultiplayer ) {
@@ -530,7 +530,7 @@ void idItem::Spawn( void ) {
 		renderEntity.customShader = declManager->FindMaterial( spawnArgs.GetString( "mtr_simple_icon" ) );
 
 		renderEntity.referenceShader = 0;
-		renderEntity.bounds = renderEntity.hModel->Bounds( &renderEntity );
+		renderEntity.bounds = R_ModelBoundsQ4( renderEntity.hModel, &renderEntity );
 		SetAxis( mat3_identity );
 	} else {
 		if ( spawnArgs.GetString( "fx_idle" ) ) {

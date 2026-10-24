@@ -132,9 +132,28 @@ idCVar ui_chat(						"ui_chat",					"0",			CVAR_GAME | CVAR_USERINFO | CVAR_BOOL
 // change anytime vars
 idCVar developer(					"developer",				"0",			CVAR_GAME | CVAR_BOOL, "" );
 
-idCVar g_forceModel(				"g_forceModel",				"",			CVAR_GAME | CVAR_ARCHIVE, "Locally forces all players to this model in non-team gameplay modes.  See g_forceStroggModel, g_forceMarineModel.  listModels to list available models", idCmdSystem::ArgCompletion_ForceModel );
-idCVar g_forceStroggModel(			"g_forceStroggModel",		"",			CVAR_GAME | CVAR_ARCHIVE, "Locally forces Strogg team players to this model in team gameplay modes.  See g_forceModel.  listModels to list available models", idCmdSystem::ArgCompletion_ForceModelStrogg );
-idCVar g_forceMarineModel(			"g_forceMarineModel",		"",			CVAR_GAME | CVAR_ARCHIVE, "Locally forces Marine team players to this model in team gameplay modes.  See g_forceModel.  listModels to list available models", idCmdSystem::ArgCompletion_ForceModelMarine );
+// DUDE: Raven's idCmdSystem completions for the player model cvars (its engine listed the
+// playerModel decls; DUDE's idCmdSystem has no such statics): every model, or a team's
+static void ArgCompletion_PlayerModels( const idCmdArgs &args, void(*callback)( const char *s ), bool strogg, bool marine ) {
+	for ( int i = 0; i < declManager->GetNumDecls( DECL_PLAYER_MODEL ); i++ ) {
+		const rvDeclPlayerModel *model = static_cast<const rvDeclPlayerModel *>( declManager->DeclByIndex( DECL_PLAYER_MODEL, i, true ) );
+		if ( model == NULL ) {
+			continue;
+		}
+		const bool isStrogg = !model->team.Icmp( "strogg" );
+		const bool isMarine = !model->team.Icmp( "marine" );
+		if ( ( strogg && isStrogg ) || ( marine && isMarine ) || ( strogg && marine ) ) {
+			callback( va( "%s %s", args.Argv( 0 ), model->GetName() ) );
+		}
+	}
+}
+static void ArgCompletion_ForceModel( const idCmdArgs &args, void(*callback)( const char *s ) ) { ArgCompletion_PlayerModels( args, callback, true, true ); }
+static void ArgCompletion_ForceModelStrogg( const idCmdArgs &args, void(*callback)( const char *s ) ) { ArgCompletion_PlayerModels( args, callback, true, false ); }
+static void ArgCompletion_ForceModelMarine( const idCmdArgs &args, void(*callback)( const char *s ) ) { ArgCompletion_PlayerModels( args, callback, false, true ); }
+
+idCVar g_forceModel(				"g_forceModel",				"",			CVAR_GAME | CVAR_ARCHIVE, "Locally forces all players to this model in non-team gameplay modes.  See g_forceStroggModel, g_forceMarineModel.  listModels to list available models", ArgCompletion_ForceModel );
+idCVar g_forceStroggModel(			"g_forceStroggModel",		"",			CVAR_GAME | CVAR_ARCHIVE, "Locally forces Strogg team players to this model in team gameplay modes.  See g_forceModel.  listModels to list available models", ArgCompletion_ForceModelStrogg );
+idCVar g_forceMarineModel(			"g_forceMarineModel",		"",			CVAR_GAME | CVAR_ARCHIVE, "Locally forces Marine team players to this model in team gameplay modes.  See g_forceModel.  listModels to list available models", ArgCompletion_ForceModelMarine );
 
 // RAVEN BEGIN
 // jnewquist: vertical stretch for letterboxed cinematics authored for 4:3 aspect

@@ -2999,7 +2999,7 @@ void idMultiplayerGame::CommonRun( void ) {
 				renderEntity->customShader = declManager->FindMaterial( item->spawnArgs.GetString( "mtr_simple_icon" ) );
 
 				renderEntity->referenceShader = 0;
-				renderEntity->bounds = renderEntity->hModel->Bounds( renderEntity );
+				renderEntity->bounds = R_ModelBoundsQ4( renderEntity->hModel, renderEntity );
 				renderEntity->axis = mat3_identity;
 
 				item->StopEffect( "fx_idle", true );

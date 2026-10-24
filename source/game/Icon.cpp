@@ -66,7 +66,7 @@ qhandle_t rvIcon::CreateIcon( const char *mtr, int suppressViewID ) {
 	renderEnt.noSelfShadow = true;
 	renderEnt.customShader = declManager->FindMaterial( mtr );
 	renderEnt.referenceShader = 0;
-	renderEnt.bounds = renderEnt.hModel->Bounds( &renderEnt );
+	renderEnt.bounds = R_ModelBoundsQ4( renderEnt.hModel, &renderEnt );
 	renderEnt.suppressSurfaceInViewID = suppressViewID;
 	
 	iconHandle = gameRenderWorld->AddEntityDef( &renderEnt );

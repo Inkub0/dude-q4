@@ -290,7 +290,7 @@ void idGameEdit::ParseSpawnArgsToRenderEntity( const idDict *args, renderEntity_
 		}
 	}
 	if ( renderEntity->hModel ) {
-		renderEntity->bounds = renderEntity->hModel->Bounds( renderEntity );
+		renderEntity->bounds = R_ModelBoundsQ4( renderEntity->hModel, renderEntity );
 	} else {
 		renderEntity->bounds.Zero();
 	}
@@ -1273,7 +1273,7 @@ void idEntity::SetModel( const char *modelname ) {
 	renderEntity.numJoints = 0;
 	renderEntity.joints = NULL;
 	if ( renderEntity.hModel ) {
-		renderEntity.bounds = renderEntity.hModel->Bounds( &renderEntity );
+		renderEntity.bounds = R_ModelBoundsQ4( renderEntity.hModel, &renderEntity );
 	} else {
 		renderEntity.bounds.Zero();
 	}

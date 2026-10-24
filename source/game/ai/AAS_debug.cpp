@@ -172,9 +172,9 @@ void idAASLocal::DrawArea( int areaNum ) const {
 	if ( aas_showAreaBounds.GetBool() ) {
 		if ( (area->flags&AREA_FLOOR)  ) {
 			idVec3 areaTop = area->center;
-			areaTop.z = area->ceiling;
+			areaTop.z = file->GetAreaCeiling( areaNum );
 			gameRenderWorld->DebugArrow( colorCyan, area->center, areaTop, 1 );
-			gameRenderWorld->DrawText( va( "%4.2f", floor(area->ceiling-area->center.z) ), ( area->center + areaTop ) * 0.5f, 0.1f, colorCyan, gameLocal.GetLocalPlayer()->viewAxis );
+			gameRenderWorld->DrawText( va( "%4.2f", floor(file->GetAreaCeiling( areaNum )-area->center.z) ), ( area->center + areaTop ) * 0.5f, 0.1f, colorCyan, gameLocal.GetLocalPlayer()->viewAxis );
 		} else {//air area
 			DrawAreaBounds( areaNum );
 		}
@@ -377,9 +377,9 @@ void idAASLocal::DrawSimpleArea( int areaNum ) const {
 	if ( aas_showAreaBounds.GetBool() ) {
 		if ( (area->flags&AREA_FLOOR) ) {
 			idVec3 areaTop = area->center;
-			areaTop.z = area->ceiling;
+			areaTop.z = file->GetAreaCeiling( areaNum );
 			gameRenderWorld->DebugArrow( colorCyan, area->center, areaTop, 1 );
-			gameRenderWorld->DrawText( va( "%4.2f", floor(area->ceiling-area->center.z) ), ( area->center + areaTop ) * 0.5f, 0.1f, colorCyan, gameLocal.GetLocalPlayer()->viewAxis );
+			gameRenderWorld->DrawText( va( "%4.2f", floor(file->GetAreaCeiling( areaNum )-area->center.z) ), ( area->center + areaTop ) * 0.5f, 0.1f, colorCyan, gameLocal.GetLocalPlayer()->viewAxis );
 		} else {//air area
 			DrawAreaBounds( areaNum );
 		}

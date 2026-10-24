@@ -253,7 +253,7 @@ rvEffect::ShowEditingDialog
 ===============
 */
 void rvEffect::ShowEditingDialog( void ) {
-	common->InitTool( EDITOR_FX, &spawnArgs );
+	common->InitTool( (toolFlag_t)EDITOR_FX, &spawnArgs );
 }
 
 /*

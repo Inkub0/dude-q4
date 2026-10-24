@@ -247,6 +247,34 @@ ID_INLINE void rvListHeapPop( idList<type> &list ) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// threads/AutoCrit.h - critical sections for Raven's threaded builds; on the PC they compile out
+// ---------------------------------------------------------------------------------------------
+template <typename t>
+class AutoCrit {
+public:
+	AutoCrit() { }
+	~AutoCrit() { }
+};
+
+template <typename t>
+class ConditionalAutoCrit {
+public:
+	ConditionalAutoCrit() { }
+	~ConditionalAutoCrit() { }
+};
+
+class ThreadedAlloc { };		// the tag of the allocation critical section
+
+// ---------------------------------------------------------------------------------------------
+// sys/sys_public.h - source location strings
+// ---------------------------------------------------------------------------------------------
+#define STRINGIZE( x )						#x
+#define STRINGIZE_INDIRECT( F, X )			F( X )
+#define __LINESTR__							STRINGIZE_INDIRECT( STRINGIZE, __LINE__ )
+#define __FILELINEFUNC__					( __FILE__ " " __LINESTR__ " " __FUNCTION__ )
+#define __FUNCLINE__						( __FUNCTION__ " " __LINESTR__ )
+
+// ---------------------------------------------------------------------------------------------
 // rvRandom (math/Math.h, Math.cpp) - jscott: fast and reliable random routines
 // ---------------------------------------------------------------------------------------------
 class rvRandom {

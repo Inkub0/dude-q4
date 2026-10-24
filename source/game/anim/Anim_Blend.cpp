@@ -2819,7 +2819,7 @@ bool idDeclModelDef::ParseAnim( idLexer &src, int numDefaultAnims ) {
 idDeclModelDef::Parse
 ================
 */
-bool idDeclModelDef::Parse( const char *text, const int textLength, bool noCaching ) {
+bool idDeclModelDef::Parse( const char *text, const int textLength ) {
 	int					i;
 	int					num;
 	idStr				filename;
@@ -3065,7 +3065,7 @@ idDeclModelDef::Validate
 */
 bool idDeclModelDef::Validate( const char *psText, int iTextLength, idStr &strReportTo ) const {
 	idDeclModelDef *pSelf = (idDeclModelDef*) declManager->AllocateDecl( DECL_MODELDEF );
-	bool bOk = pSelf->Parse( psText, iTextLength, false );
+	bool bOk = pSelf->Parse( psText, iTextLength );
 	pSelf->FreeData();
 	delete pSelf->base;
 	delete pSelf;
@@ -5896,7 +5896,7 @@ idRenderModel *idGameEdit::ANIM_CreateMeshForAnim( idRenderModel *model, const c
 
 	ANIM_CreateAnimFrame( model, md5anim, ent.numJoints, ent.joints, FRAME2MS( frame ), offset, remove_origin_offset );
 
-	newmodel = model->InstantiateDynamicModel( &ent, NULL, NULL, ~SURF_COLLISION );
+	newmodel = R_InstantiateDynamicModelQ4( model, &ent );		// DUDE: through quake4/RenderWorldQ4.h
 
 	Mem_Free16( ent.joints );
 	ent.joints = NULL;

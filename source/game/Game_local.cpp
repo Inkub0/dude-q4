@@ -2037,7 +2037,7 @@ bool idGameLocal::InitFromSaveGame( const char *mapName, idRenderWorld *renderWo
 		if ( !InhibitEntitySpawn( mapEnt->epairs ) ) {
 			CacheDictionaryMedia( &mapEnt->epairs );
 			const char *classname = mapEnt->epairs.GetString( "classname" );
-			if ( classname != '\0' ) {
+			if ( classname != NULL ) {
 				FindEntityDef( classname, false );
 			}
 		}
@@ -2528,11 +2528,13 @@ void idGameLocal::DumpOggSounds( void ) {
 	idStrList oggSounds, weaponSounds;
 	const idSoundShader *soundShader;
 	const soundShaderParms_t *parms;
+	soundShaderParms_t parmsCopy;		// DUDE: Quake 4's parms are a copy (quake4/SoundQ4.h)
 	idStr soundName;
 
 	for ( i = 0; i < declManager->GetNumDecls( DECL_SOUND ); i++ ) {
 		soundShader = static_cast<const idSoundShader *>(declManager->DeclByIndex( DECL_SOUND, i, false ));
-		parms = soundShader->GetParms();
+		soundShader->GetParms( &parmsCopy );
+		parms = &parmsCopy;
 
 		if ( soundShader->EverReferenced() && soundShader->GetState() != DS_DEFAULTED ) {
 
@@ -2655,7 +2657,7 @@ void idGameLocal::GetShakeSounds( const idDict *dict ) {
 	idStr soundName;
 
 	soundShaderName = dict->GetString( "s_shader" );
-	if ( soundShaderName != '\0' && dict->GetFloat( "s_shakes" ) != 0.0f ) {
+	if ( soundShaderName != NULL && dict->GetFloat( "s_shakes" ) != 0.0f ) {
 		soundShader = declManager->FindSound( soundShaderName );
 
 		for ( int i = 0; i < soundShader->GetNumSounds(); i++ ) {
