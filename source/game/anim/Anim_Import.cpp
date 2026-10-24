@@ -16,7 +16,7 @@ static idStr				Maya_Error;
 
 static exporterInterface_t	Maya_ConvertModel = NULL;
 static exporterShutdown_t	Maya_Shutdown = NULL;
-static int					importDLL = 0;
+static uintptr_t			importDLL = 0;	// DUDE (dhewm3 0c84e4bf): a DLL handle is pointer-sized
 
 bool idModelExport::initialized = false;
 
