@@ -5140,6 +5140,14 @@ idEntity::Event_StartSoundShader
 ================
 */
 void idEntity::Event_StartSoundShader( const char *soundName, int channel ) {
+	// DUDE (dhewm3 4dcc7efe): startSoundShader( "", channel ) is the scripts' way to stop a sound;
+	// FindSound( "" ) would play the default beep when s_playDefaultSound is set
+	if ( soundName == NULL || soundName[0] == '\0' ) {
+		StopSound( (s_channelType)channel, false );
+		idThread::ReturnFloat( 0.0f );
+		return;
+	}
+
 	int length;
 
 	StartSoundShader( declManager->FindSound( soundName ), (s_channelType)channel, 0, false, &length );
