@@ -2,9 +2,15 @@
 //
 // The game compiles against DUDE's idlib (precompiled.h), whose types cross into the engine.
 // Raven's own types and switches that never cross the boundary come from here, as Raven wrote
-// them in its idlib (Heap.h, rvMemSys.h, math/Math.h + Math.cpp, containers/Pair.h,
-// math/Interpolate.h), on Raven's PC build: no tracking memory system (_RV_MEM_SYS_SUPPORT
-// off), so the heap and tag macros compile to nothing and DUDE's allocator does the work.
+// them in its idlib (Heap.h, rvMemSys.h, math/Math.h + Math.cpp, math/Vector.cpp, Str.h + Str.cpp,
+// containers/List.h, Pair.h, Queue.h, math/Interpolate.h, BitMsg.h + BitMsg.cpp), on Raven's PC
+// build: no tracking memory system (_RV_MEM_SYS_SUPPORT off), so the heap and tag macros compile
+// to nothing and DUDE's allocator does the work.
+//
+// Methods Raven added to id's classes (idVec3::Dist, idBitMsg::WriteLong, ...) are DUDE's: its
+// idlib has them, written for DUDE, without changing a layout. The few whose Raven behaviour has
+// quirks the game was shipped with - the idList heap, idStr::Split, the escape-code functions -
+// are kept here as Raven wrote them, as free functions, and the game calls them by these names.
 
 #ifndef __RAVEN_IDLIB_H__
 #define __RAVEN_IDLIB_H__
@@ -88,11 +94,166 @@ Rv_Sys_Heap_ID_t;
 #define RV_POP_HEAP_EXIT_CRIT_SECT()
 
 // ---------------------------------------------------------------------------------------------
+// math (math/Math.h, math/Vector.cpp)
+// ---------------------------------------------------------------------------------------------
+// Sign() with zero counted as positive
+template<class T> ID_INLINE T	SignZero( T f ) { return ( f > 0 ) ? 1 : ( ( f < 0 ) ? -1 : 1 ); }
+
+extern idVec4 vec4_one;
+
+// ---------------------------------------------------------------------------------------------
+// string colours, icons and escape codes (Str.h, Str.cpp)
+// ---------------------------------------------------------------------------------------------
+// RAVEN BEGIN
+// bdube: added
+const int C_COLOR_CONSOLE			= ':';
+// RAVEN END
+
+// RAVEN BEGIN
+// bdube: added
+#define S_COLOR_CONSOLE				"^:"
+// ddynerman: team colors
+#define S_COLOR_MARINE				"^c683"
+#define S_COLOR_STROGG				"^c950"
+#define S_COLOR_ALERT				"^c920"
+// ddynerman: MP icons
+#define I_VOICE_ENABLED				"^ivce"
+#define I_VOICE_DISABLED			"^ivcd"
+#define I_FRIEND_ENABLED			"^ifde"
+#define I_FRIEND_DISABLED			"^ifdd"
+#define I_FLAG_MARINE				"^iflm"
+#define I_FLAG_STROGG				"^ifls"
+#define I_READY						"^iyrd"
+#define I_NOT_READY					"^inrd"
+// shouchard:  server browser stuff
+#define I_SERVER_DEDICATED			"^ids0"
+#define I_SERVER_DEDICATED_PB		"^idsp"
+#define I_SERVER_LOCKED				"^isl0"
+#define I_SERVER_FAVORITE			"^isf0"
+// RAVEN END
+
+// RAVEN BEGIN
+// bdube: string escape codes
+#define S_ESCAPE_UNKNOWN			BIT(0)
+#define S_ESCAPE_COLOR				BIT(1)
+#define S_ESCAPE_COLORINDEX			BIT(2)
+#define S_ESCAPE_ICON				BIT(3)
+#define S_ESCAPE_COMMAND			BIT(4)
+#define	S_ESCAPE_ALL				( S_ESCAPE_COLOR | S_ESCAPE_COLORINDEX | S_ESCAPE_ICON | S_ESCAPE_COMMAND )
+// RAVEN END
+
+// Raven's idStr escape-code functions and Split (static members of its idStr), here as rvStr::
+// statics; the game's idStr::IcmpNoEscape( a, b ), s.RemoveEscapes(), idStr::Split( src, ... )
+// and s.Split( ... ) call these.
+class rvStr {
+public:
+	// length of the escape code at s (0: none), its S_ESCAPE_* type in *type
+	static int				IsEscape( const char *s, int *type = NULL );
+	static int				LengthWithoutEscapes( const char *s );
+	static int				IcmpNoEscape( const char *s1, const char *s2 );
+	static char *			RemoveEscapes( char *s, int escapes = S_ESCAPE_ALL );
+	static idStr &			RemoveEscapes( idStr &s, int escapes = S_ESCAPE_ALL );
+	static void				Split( const char *source, idList<idStr> &list, const char delimiter = ',', const char groupDelimiter = '\'' );
+};
+
+ID_INLINE idStr &rvStr::RemoveEscapes( idStr &s, int escapes ) {
+	if ( s.Length() ) {
+		RemoveEscapes( &s[0], escapes );		// in place, never longer
+		s.CapLength( idStr::Length( s.c_str() ) );
+	}
+	return s;
+}
+
+// ---------------------------------------------------------------------------------------------
+// idList as a heap (containers/List.h: cdr's HeapAdd / HeapPop members), here as free functions;
+// the game's list.HeapAdd( obj ) and list.HeapPop() call these
+// ---------------------------------------------------------------------------------------------
+/*
+================
+idList<type>::HeapAdd
+
+Adds a value to the list as if the list was a heap by doing a bubble swap sort
+First it appends the object, then swaps up the heap at successive parent positions
+as needed
+
+Complexity: O[n log n]
+================
+*/
+template< class type >
+ID_INLINE void rvListHeapAdd( idList<type> &list, const type & obj ) {
+
+	int pos = list.Append( obj );
+
+	while (pos && list[((pos-1)/2)]<list[pos])
+	{
+		idSwap(list[((pos-1)/2)], list[pos]);
+		pos = ((pos-1)/2);
+	}
+}
+
+/*
+================
+idList<type>::HeapPop
+
+Removes the top element from the heap and
+First swaps the top element of the heap with the lowest
+element, destroys the lowest element (wich was the top),
+and then sorts the new top element down the heap as
+needed
+
+Complexity: O[n log n]
+================
+*/
+template< class type >
+ID_INLINE void rvListHeapPop( idList<type> &list ) {
+
+	assert(list.Num()>0);
+	if (list.Num()<=0)
+	{
+		return;
+	}
+
+	idSwap(list[0], list[list.Num()-1]);
+	list.SetNum( list.Num() - 1, false );		// Raven: num--
+	const int num = list.Num();
+
+	int pos = 0;
+
+	int largestChild = pos;
+	if (((2*pos)+1)<num)
+	{
+		if (((2*pos)+2)<num)
+		{
+			largestChild = ( (list[((2*pos)+2)] < list[((2*pos)+1)]) ? (((2*pos)+1)) : (((2*pos)+2)) );
+		}
+		largestChild = ((2*pos)+1);
+	}
+
+	while (largestChild!=pos && list[pos]<list[largestChild])
+	{
+		idSwap(list[largestChild], list[pos]);
+		pos = largestChild;
+
+		largestChild = pos;
+		if (((2*pos)+1)<num)
+		{
+			if (((2*pos)+2)<num)
+			{
+				largestChild = ( (list[((2*pos)+2)] < list[((2*pos)+1)]) ? (((2*pos)+1)) : (((2*pos)+2)) );
+			}
+			largestChild = ((2*pos)+1);
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------------------------
 // rvRandom (math/Math.h, Math.cpp) - jscott: fast and reliable random routines
 // ---------------------------------------------------------------------------------------------
 class rvRandom {
 private:
-	static	unsigned long	mSeed;
+	// DUDE: unsigned int, not Raven's unsigned long - 32 bits on its 32-bit build, 64 here,
+	// where the generator's "mSeed >> 17" would leave the 0..32767 range it is written for
+	static	unsigned int	mSeed;
 public:
 							rvRandom( void ) { mSeed = 0x89abcdef; }
 
@@ -100,7 +261,7 @@ public:
 	static	int				Init( void );
 
 	// Init the seed to a unique number
-	static	void			Init( unsigned long seed ) { mSeed = seed; }
+	static	void			Init( unsigned long seed ) { mSeed = (unsigned int)seed; }
 
 	// Returns a float min <= x < max (exclusive; will get max - 0.00001; but never max)
 	static	float			flrand( float min, float max );
@@ -175,10 +336,7 @@ ID_INLINE float Linear( float frac ) {
 }
 
 ID_INLINE float SinusoidalMidPoint( float frac ) {
-	// idMath::MidPointLerp( 0, 60, 90, frac ), as Raven's Math.cpp defines it
-	const float degrees = ( frac < 0.5f ) ? 0.0f + ( 60.0f - 0.0f ) * ( 2.0f * frac )
-										  : 60.0f + ( 90.0f - 60.0f ) * ( 2.0f * ( frac - 0.5f ) );
-	return idMath::Sin( DEG2RAD( degrees ) );
+	return idMath::Sin( DEG2RAD( idMath::MidPointLerp( 0.0f, 60.0f, 90.0f, frac ) ) );
 }
 
 typedef float (*TimeManipFunc) ( float );
@@ -237,6 +395,159 @@ protected:
 	mutable float		currentTime;
 	mutable idQuat		currentValue;
 	TimeManipFunc		timeFunc;
+};
+
+
+// ---------------------------------------------------------------------------------------------
+// rvBits, rvPool, rvIndexPool (containers/Queue.h)
+// ---------------------------------------------------------------------------------------------
+/*
+===============================================================================
+
+	Raven Bit Vector Template
+
+===============================================================================
+*/
+template<int CAPACITY>
+class rvBits
+{
+	enum
+	{
+		BITS_SHIFT		= 5,										// 5.  Such A Nice Number
+		BITS_INT_SIZE	= 32,										// Size Of A Single Word
+		BITS_AND		= (BITS_INT_SIZE - 1),						// Used For And Operation
+		ARRAY_SIZE		= ((CAPACITY + BITS_AND)/(BITS_INT_SIZE)),	// Num Words Used
+		DATA_BYTE_SIZE	= (ARRAY_SIZE*sizeof(unsigned int)),		// Num Bytes Used
+	};
+
+	unsigned int	mData[ARRAY_SIZE];
+
+public:
+	rvBits()									{clear();}
+	void	clear()								{memset(mData, 0, (size_t)(ARRAY_SIZE * sizeof( unsigned int )));}
+	bool	valid(const int i)					{return (i>=0 && i<CAPACITY);}
+	void	unset(const int i)					{assert(valid(i));			mData[i>>BITS_SHIFT] &= ~(1<<(i&BITS_AND));}
+	void	set(const int i)					{assert(valid(i));			mData[i>>BITS_SHIFT] |=  (1<<(i&BITS_AND));}
+	bool	operator[](const int i)				{assert(valid(i));	return (mData[i>>BITS_SHIFT] &   (1<<(i&BITS_AND)))!=0;}
+};
+
+/*
+===============================================================================
+
+	Raven Pool
+
+===============================================================================
+*/
+template<class TYPE, int CAPACITY>
+class rvPool
+{
+	TYPE			mData[CAPACITY];
+	TYPE*			mFree[CAPACITY];
+	int				mSize;
+
+public:
+	rvPool()									{clear();}
+	int		size()								{return mSize;}
+	bool	empty()								{return mSize==0;}
+	bool	full()								{return mSize>=CAPACITY;}
+	void	clear()								{mSize=0; for (int i=0; i<CAPACITY; i++)				mFree[i]=&mData[i];}
+	void	free(TYPE* t)						{assert(!empty());	mSize--;							mFree[mSize]=t;}
+	TYPE*	alloc()								{assert(!full());	mSize++;							return mFree[mSize-1];}
+};
+
+
+/*
+===============================================================================
+
+	Raven Index Pool
+
+===============================================================================
+*/
+template<class TYPE, int CAPACITY, int INDEXNUM>
+class rvIndexPool
+{
+	TYPE			mData[CAPACITY];
+	TYPE*			mFree[CAPACITY];
+	TYPE*			mIndx[INDEXNUM];
+	int				mSize;
+
+public:
+	rvIndexPool()								{clear();}
+	int		size()								{return mSize;}
+	bool	empty()								{return mSize==0;}
+	bool	full()								{return mSize>=CAPACITY;}
+	void	clear()								{mSize=0; for (int i=0; i<CAPACITY; i++) mFree[i]=&mData[i]; memset(mIndx, 0, sizeof(mIndx));}
+	bool	valid(int i)						{return (i>=0 && i<INDEXNUM && mIndx[i]);}
+	TYPE*	operator[](int i)					{assert(valid(i));	return mIndx[i];}
+	TYPE*	alloc(int i)						{assert(!full());	mSize++;	mIndx[i]=mFree[mSize-1];	return mFree[mSize-1];}
+	void	free(int i)							{assert(valid(i));	mSize--;	mFree[mSize]=mIndx[i];		mIndx[i]=NULL;}
+};
+
+// ---------------------------------------------------------------------------------------------
+// idMsgQueue, idBitMsgQueue (BitMsg.h, BitMsg.cpp) - the game's message queues; DUDE's engine has
+// its own idMsgQueue (framework/async/MsgChannel.h), which the game never includes and whose
+// symbols the engine does not export
+// ---------------------------------------------------------------------------------------------
+#define MAX_MSG_QUEUE_SIZE				16384		// must be a power of 2
+
+class idMsgQueue {
+public:
+					idMsgQueue();
+
+	void			Init( int sequence );
+
+	bool			Add( const byte *data, const int size, bool sequencing );
+	// prepend to a message without the need to a memcopy and readjust
+	bool			AddConcat( const byte *data1, const int size1, const byte *data2, const int size2, bool sequencing );
+	bool			Get( byte *data, int dataSize, int &size, bool sequencing );
+	int				GetTotalSize( void ) const;
+	int				GetSpaceLeft( void ) const;
+	int				GetFirst( void ) const { return first; }
+	int				GetLast( void ) const { return last; }
+	void			CopyToBuffer( byte *buf ) const;
+
+	void			WriteTo( idBitMsg &msg );
+	void			FlushTo( idBitMsg &msg );
+	void			ReadFrom( const idBitMsg &msg );
+
+	void			Save( idFile *file ) const;
+	void			Restore( idFile *file );
+
+private:
+	byte			buffer[MAX_MSG_QUEUE_SIZE];
+	int				first;			// sequence number of first message in queue
+	int				last;			// sequence number of last message in queue
+	int				startIndex;		// index pointing to the first byte of the first message
+	int				endIndex;		// index pointing to the first byte after the last message
+
+public:
+	void			WriteByte( byte b );
+	byte			ReadByte( void );
+	void			WriteShort( int s );
+	void			WriteUShort( int s );
+	int				ReadShort( void );
+	int				ReadUShort( void );
+	void			WriteLong( int l );
+	int				ReadLong( void );
+	void			WriteData( const byte *data, const int size );
+	void			ReadData( byte *data, const int size );
+};
+
+class idBitMsgQueue {
+public:
+					idBitMsgQueue();
+
+	void			Init( void );
+
+	void			Add( const idBitMsg &msg, const int timestamp );
+	bool			Get( idBitMsg &msg, int &timestamp );
+	bool			Get( idBitMsg &msg ) { int dummy; return Get( msg, dummy); }
+	bool			GetTimestamp( int &timestamp );
+
+private:
+	int				nextTimestamp;
+	bool			readTimestamp;
+	idLinkList<idMsgQueue>	writeList, readList;
 };
 
 #endif /* !__RAVEN_IDLIB_H__ */
