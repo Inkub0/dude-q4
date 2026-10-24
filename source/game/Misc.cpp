@@ -1046,6 +1046,12 @@ void idSpring::Think( void ) {
 	// run physics
 	RunPhysics();
 
+	// DUDE (dhewm3 697554e5): an end that is gone (removed, or not found when linking) leaves the
+	// spring force with a dangling physics object: stop pulling
+	if ( ( thinkFlags & TH_THINK ) && ( !ent1 || !ent2 ) ) {
+		BecomeInactive( TH_THINK );
+	}
+
 	if ( thinkFlags & TH_THINK ) {
 		// evaluate force
 		spring.Evaluate( gameLocal.time );
@@ -1064,7 +1070,11 @@ void idSpring::Think( void ) {
 			end = origin + p2 * axis;
 		}
 		
-		gameRenderWorld->DebugLine( idVec4(1, 1, 0, 1), start, end, 0, true );
+		// DUDE (dhewm3 697554e5): the spring's debug line only with g_debugMover - it was drawn in
+		// every frame of play (convoy2b, dispersal, network1)
+		if ( g_debugMover.GetBool() ) {
+			gameRenderWorld->DebugLine( idVec4(1, 1, 0, 1), start, end, 0, true );
+		}
 	}
 
 	Present();
@@ -1084,7 +1094,7 @@ void idSpring::Event_LinkSpring( void ) {
 	if ( name1.Length() ) {
 		ent1 = gameLocal.FindEntity( name1 );
 		if ( !ent1 ) {
-			gameLocal.Error( "idSpring '%s' at (%s): cannot find first entity '%s'", name.c_str(), GetPhysics()->GetOrigin().ToString(0), name1.c_str() );
+			gameLocal.Warning( "idSpring '%s' at (%s): cannot find first entity '%s'", name.c_str(), GetPhysics()->GetOrigin().ToString(0), name1.c_str() );
 		}
 	}
 	else {
@@ -1094,11 +1104,15 @@ void idSpring::Event_LinkSpring( void ) {
 	if ( name2.Length() ) {
 		ent2 = gameLocal.FindEntity( name2 );
 		if ( !ent2 ) {
-			gameLocal.Error( "idSpring '%s' at (%s): cannot find second entity '%s'", name.c_str(), GetPhysics()->GetOrigin().ToString(0), name2.c_str() );
+			gameLocal.Warning( "idSpring '%s' at (%s): cannot find second entity '%s'", name.c_str(), GetPhysics()->GetOrigin().ToString(0), name2.c_str() );
 		}
 	}
 	else {
 		ent2 = gameLocal.entities[ENTITYNUM_WORLD];
+	}
+	// DUDE (dhewm3 697554e5): a missing end is a warning now, so don't link to it
+	if ( !ent1 || !ent2 ) {
+		return;
 	}
 	spring.SetPosition( ent1->GetPhysics(), id1, p1, ent2->GetPhysics(), id2, p2 );
 	BecomeActive( TH_THINK );
@@ -1151,7 +1165,9 @@ void idSpring::Restore( idRestoreGame *savefile ) {
 	savefile->ReadVec3 ( p1 );
 	savefile->ReadVec3 ( p2 );
 	spring.Restore ( savefile );
-	Event_LinkSpring ( );	
+	// DUDE (dhewm3 697554e5): link once every entity is restored - an end later in the savegame is
+	// not found yet (its name is hashed in its own Restore) and failed the load
+	PostEventMS( &EV_PostSpawn, 0 );
 }
 
 /*
