@@ -544,7 +544,11 @@ void rvClientEntity::InitDefaultPhysics( const idVec3 &origin, const idMat3 &axi
 		}
 	}
 
-	defaultPhysicsObj.SetSelf( gameLocal.entities[ENTITYNUM_CLIENT] );
+	// DUDE: while a savegame's objects are created the client entity is not there yet; retail
+	// (asserts off) left self NULL until the physics object's own Restore, which reads it
+	if ( gameLocal.entities[ENTITYNUM_CLIENT] != NULL ) {
+		defaultPhysicsObj.SetSelf( gameLocal.entities[ENTITYNUM_CLIENT] );
+	}
 	defaultPhysicsObj.SetClipModel( clipModel, 1.0f );
 	defaultPhysicsObj.SetOrigin( origin );
 	defaultPhysicsObj.SetAxis( axis );
