@@ -1836,7 +1836,7 @@ void idCameraAnim::Think( void ) {
 
 		if ( cameraDef->GetAnim(1)->GetFrameRate() == gameLocal.GetMHz() ) {
 			frameTime	= gameLocal.time - starttime;
-			frame		= frameTime / gameLocal.msec;
+			frame		= frameTime / gameLocal.msecPrecise;		// DUDE: msec alternates 16/17
 		} else {
 			frameTime	= ( gameLocal.time - starttime ) * cameraDef->GetAnim(1)->GetFrameRate();
 			frame		= frameTime / 1000;
@@ -1897,7 +1897,7 @@ void idCameraAnim::GetViewParms( renderView_t *view ) {
 
 	if ( cameraDef->GetAnim(1)->GetFrameRate() == gameLocal.GetMHz() ) {
 		frameTime	= gameLocal.time - starttime;
-		frame		= frameTime / gameLocal.msec;
+		frame		= frameTime / gameLocal.msecPrecise;		// DUDE: msec alternates 16/17
 		lerp		= 0.0f;
 	} else {
 		frameTime	= ( gameLocal.time - starttime ) * cameraDef->GetAnim(1)->GetFrameRate();

@@ -1039,7 +1039,7 @@ void idThread::WaitFrame( void ) {
 	// manual control threads don't set waitingUntil so that they can be run again
 	// that frame if necessary.
 	if ( !manualControl ) {
-		waitingUntil = gameLocal.time + gameLocal.msec;
+		waitingUntil = gameLocal.time + gameLocal.msecPrecise;		// DUDE: the next frame (dhewm3 f4f14cc0)
 	}
 }
 

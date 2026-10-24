@@ -389,6 +389,7 @@ public:
 	int						previousTime;			// time in msec of last frame
 	int						time;					// in msec
 	int						msec;					// time since last update in milliseconds
+	float					msecPrecise;			// DUDE (dhewm3 f4f14cc0): 1000 / mHz exactly, for what needs one constant frame
 	int						mHz;					// hertz
 
 	int						vacuumAreaNum;			// -1 if level doesn't have any outside areas

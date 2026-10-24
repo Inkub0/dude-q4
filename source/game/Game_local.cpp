@@ -426,6 +426,7 @@ void idGameLocal::Init( void ) {
 
 	mHz = common->GetUserCmdHz();
 	msec = common->GetUserCmdMSec();
+	msecPrecise = 1000.0f / mHz;
 
 // RAVEN BEGIN
 // jsinger: attempt to eliminate cross-DLL allocation issues
@@ -1311,6 +1312,7 @@ void idGameLocal::LoadMap( const char *mapName, int randseed ) {
 	// these can changed based upon sp / mp
 	mHz = common->GetUserCmdHz();
 	msec = common->GetUserCmdMSec();
+	msecPrecise = 1000.0f / mHz;
 
 	if ( !sameMap || ( mapFile && mapFile->NeedsReload() ) ) {
 		// load the .map file
@@ -3457,6 +3459,19 @@ void idGameLocal::MenuFrame( void ) { }
 
 /*
 ================
+CalcMSec
+
+DUDE (dhewm3 abd8d4ac, dezo2/DG): this frame's length, 1000/hz or 1000/hz + 1 (16 or 17 ms at
+60 Hz), so that hz frames add up to exactly 1000 ms. A constant 16 ms made a second of game time
+960 ms of real time: cinematics and animations ran slow and drifted from their audio.
+================
+*/
+static int CalcMSec( long long framenum, int hz ) {
+	return int( ( framenum * 1000LL ) / hz - ( ( framenum - 1 ) * 1000LL ) / hz );
+}
+
+/*
+================
 idGameLocal::RunFrame
 ================
 */
@@ -3494,6 +3509,7 @@ idGameLocal::RunFrame
 		framenum++;
 		previousTime = time;
 		// bdube: use GetMSec access rather than USERCMD_TIME
+		msec = CalcMSec( framenum, mHz );		// DUDE: recalculated each frame, see CalcMSec
 		time += GetMSec();
 
 		realClientTime = time;
@@ -5618,10 +5634,10 @@ void idGameLocal::AlertAI( idEntity *ent ) {
 		if ( ent->IsType( idActor::GetClassType() ) ) {
 // RAVEN END
 			// alert them for the next frame
-			lastAIAlertActorTime = time + GetMSec();
+			lastAIAlertActorTime = time + msecPrecise;		// DUDE: the next frame, whichever length it has
 			lastAIAlertActor = static_cast<idActor *>( ent );
 		} else {
-			lastAIAlertEntityTime = time + GetMSec();
+			lastAIAlertEntityTime = time + msecPrecise;
 			lastAIAlertEntity = ent;
 		}
 	} else {
@@ -6164,7 +6180,7 @@ void idGameLocal::SetCamera( idCamera *cam ) {
 
 	} else {
 		inCinematic = false;
-		cinematicStopTime = time + msec;
+		cinematicStopTime = time + msecPrecise;		// DUDE: the next frame
 
 		// restore r_znear
 		cvarSystem->SetCVarFloat( "r_znear", 3.0f );
