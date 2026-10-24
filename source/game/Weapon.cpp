@@ -2687,16 +2687,21 @@ void rvWeapon::LaunchProjectiles ( idDict& dict, const idVec3& muzzleOrigin, con
 			idVec3  start;
 			float   distance;
 			trace_t	tr;
+			// DUDE (dhewm3 b03fc927): ownerBounds - projBounds is only a box when the projectile is
+			// smaller than the owner on every axis (idBounds::operator- asserts, else an inverted box)
+			const idVec3 obDiff = ownerBounds[1] - ownerBounds[0];
+			const idVec3 pbDiff = projBounds[1] - projBounds[0];
+			const bool boundsSubLegal = obDiff.x > pbDiff.x && obDiff.y > pbDiff.y && obDiff.z > pbDiff.z;
 //RAVEN BEGIN
 //asalmon: xbox must use muzzle Axis for aim assistance
 #ifdef _XBOX
 			muzzle_pos = muzzleOrigin + muzzleAxis[ 0 ] * 2.0f;
-			if ( ( ownerBounds - projBounds).RayIntersection( muzzle_pos, muzzleAxis[0], distance ) ) {
+			if ( boundsSubLegal && ( ownerBounds - projBounds).RayIntersection( muzzle_pos, muzzleAxis[0], distance ) ) {
 				start = muzzle_pos + distance * muzzleAxis[0];
 			} 
 #else
 			muzzle_pos = muzzleOrigin + playerViewAxis[ 0 ] * 2.0f;
-			if ( ( ownerBounds - projBounds).RayIntersection( muzzle_pos, playerViewAxis[0], distance ) ) {
+			if ( boundsSubLegal && ( ownerBounds - projBounds).RayIntersection( muzzle_pos, playerViewAxis[0], distance ) ) {
 				start = muzzle_pos + distance * playerViewAxis[0];
 			} 
 #endif
