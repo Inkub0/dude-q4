@@ -2036,8 +2036,9 @@ bool idGameLocal::InitFromSaveGame( const char *mapName, idRenderWorld *renderWo
 
 		if ( !InhibitEntitySpawn( mapEnt->epairs ) ) {
 			CacheDictionaryMedia( &mapEnt->epairs );
-			const char *classname = mapEnt->epairs.GetString( "classname" );
-			if ( classname != NULL ) {
+			// DUDE (dhewm3 94cd0ee5): GetString() returns "" for a missing key, never NULL
+			const char *classname;
+			if ( mapEnt->epairs.GetString( "classname", "", &classname ) ) {
 				FindEntityDef( classname, false );
 			}
 		}
@@ -2656,8 +2657,8 @@ void idGameLocal::GetShakeSounds( const idDict *dict ) {
 	const char *soundShaderName;
 	idStr soundName;
 
-	soundShaderName = dict->GetString( "s_shader" );
-	if ( soundShaderName != NULL && dict->GetFloat( "s_shakes" ) != 0.0f ) {
+	// DUDE (dhewm3 94cd0ee5): GetString() returns "" for a missing key, never NULL
+	if ( dict->GetString( "s_shader", "", &soundShaderName ) && dict->GetFloat( "s_shakes" ) != 0.0f ) {
 		soundShader = declManager->FindSound( soundShaderName );
 
 		for ( int i = 0; i < soundShader->GetNumSounds(); i++ ) {
