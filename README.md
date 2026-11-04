@@ -33,16 +33,27 @@ ZeniMax Media, Microsoft, Raven Software or Activision.
 
 Built by DUDE's `tools/quake4/build-q4game.sh`, against the DUDE checkout's headers and its
 idlib; the result goes next to `build/dude`, where DUDE looks for it when it runs Quake 4.
-Linux only for now:
+Linux:
 
 ```
-git clone --branch v0.9.7 https://github.com/Inkub0/dude.git
-git clone --branch v0.9.7 https://github.com/Inkub0/dude-q4.git
+git clone --branch v0.9.8 https://github.com/Inkub0/dude.git
+git clone --branch v0.9.8 https://github.com/Inkub0/dude-q4.git
 cd dude
 ./build.sh --vulkan                                   # DUDE first (dependencies: DUDE's README.md)
 Q4GAME_DIR=../dude-q4 tools/quake4/build-q4game.sh    # -> build/q4base.so
 ./run-q4.sh                                           # finds a Steam / GOG install, or Q4DIR=/path/to/Quake\ 4
 ```
+
+Windows, cross-compiled from Linux with MinGW like DUDE's `dude.exe` (the game library and the
+engine exchange C++ objects, so they must come from the same compiler):
+
+```
+./build-win.sh                                                          # DUDE for Windows first
+Q4GAME_DIR=../dude-q4 DUDE_BUILD=build-win tools/quake4/build-q4game.sh # -> build-win/q4base.dll
+```
+
+It runs with the full retail Quake 4 only (Steam, GOG or disc): DUDE refuses the Quake 4 demo,
+because the SDK licence below lets this code run with the full version of Quake 4 only.
 
 ## Releases
 
