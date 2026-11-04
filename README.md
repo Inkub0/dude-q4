@@ -13,6 +13,13 @@ that agreement attached. It is **not** GPL, which is why this code lives apart f
 never copied in here, and nothing from here goes into DUDE. You need your own copy of Quake 4 to
 play; no game data is included.
 
+Non-commercial means this project takes no money: no donations, sponsorships or paid builds
+are tied to it, and nobody may sell it or bundle it with anything sold.
+
+Quake and Quake 4 are trademarks of their owners (id Software / ZeniMax Media). This is an
+independent, non-commercial project, not affiliated with, endorsed or sponsored by id Software,
+ZeniMax Media, Microsoft, Raven Software or Activision.
+
 ## Layout
 
 - `source/` - the SDK source as Raven shipped it (first commit, unmodified): `game/` (the
@@ -37,6 +44,13 @@ Q4GAME_DIR=../dude-q4 tools/quake4/build-q4game.sh    # -> build/q4base.so
 ./run-q4.sh                                           # finds a Steam / GOG install, or Q4DIR=/path/to/Quake\ 4
 ```
 
+## Releases
+
+Built libraries are published as their own archives, `dude-q4-<version>-<platform>`, never
+inside DUDE's: `q4base.so` / `q4base.dll`, this repository's `EULA.Development Kit.rtf`
+unmodified, a README and `BUILDINFO.txt` with the exact DUDE and dude-q4 commits the library
+was built from (DUDE's `tools/quake4/package-q4.sh`).
+
 ## Versions
 
 The game library compiles against DUDE's headers, so the two must match: every DUDE release
@@ -51,4 +65,6 @@ copy, github.com/Reddragoon244/Quake-4-Source-Code (de2da6b, 2015), matches it o
 files, byte for byte once line endings are normalised.
 
 Ideas may come from other ports of this code (idTech4A++, OpenQ4); where one is used, the
-commit says so. Code reconstructed by decompiling Quake 4's binaries is never copied.
+commit says so. Some commits apply fixes that dhewm3 made to id's copy of the same code; each
+says so and names the dhewm3 commit. Code reconstructed by decompiling Quake 4's binaries is
+never copied.
