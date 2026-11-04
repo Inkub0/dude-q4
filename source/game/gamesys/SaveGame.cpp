@@ -4,11 +4,9 @@
 
 #include "../Game_local.h"
 
-#ifdef _WIN32
-#include "TypeInfo.h"
-#else
+// DUDE: no generated type info on any platform - Raven's Windows build included TypeInfo.h,
+// written by a tool the SDK does not ship
 #include "NoGameTypeInfo.h"
-#endif
 
 /*
 Save game related helper classes.
