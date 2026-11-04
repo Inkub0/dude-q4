@@ -13,7 +13,7 @@ idTypeDef	type_namespace( ev_namespace, &def_namespace, "namespace", sizeof( int
 // abahr
 rvTypeDefString	type_string( ev_string, &def_string, "string", MAX_STRING_LEN, NULL );
 rvTypeDefFloat	type_float( ev_float, &def_float, "float", sizeof( intptr_t ), NULL );
-rvTypeDefVec3	type_vector( ev_vector, &def_vector, "vector", E_EVENT_SIZEOF_VEC, NULL );
+rvTypeDefVec3	type_vector( ev_vector, &def_vector, "vector", EVENT_VEC3_SIZE, NULL );
 rvTypeDefEntity	type_entity( ev_entity, &def_entity, "entity", sizeof( intptr_t ), NULL );					// stored as entity number pointer
 // RAVEN END
 idTypeDef	type_field( ev_field, &def_field, "field", sizeof( intptr_t ), NULL );
@@ -1489,40 +1489,72 @@ void idProgram::AddDefToNameList( idVarDef *def, const char *name ) {
 
 /*
 ==============
-idProgram::ReserveMem
+idProgram::ReserveGlobals
 
-reserves memory for global variables and returns the starting pointer
+DUDE: size zeroed bytes of global variable memory
 ==============
 */
-byte *idProgram::ReserveMem(int size) {
-	byte *res = &variables[ numVariables ];
-	numVariables += size;
-	if ( numVariables > sizeof( variables ) ) {
-		throw idCompileError( va( "Exceeded global memory size (%d bytes)", sizeof( variables ) ) );
+byte *idProgram::ReserveGlobals( int size ) {
+	if ( numVariables + size > (int)sizeof( variables ) ) {
+		throw idCompileError( va( "Exceeded global memory size (%d bytes)", (int)sizeof( variables ) ) );
 	}
-
-	memset( res, 0, size );
-
-	return res;
+	byte *start = variables + numVariables;
+	numVariables += size;
+	memset( start, 0, size );
+	return start;
 }
 
 /*
 ============
-idProgram::AllocVarDef
+idProgram::CreateDef
+
+DUDE: a def of a type and name in a scope, listed under its name, with no storage yet
 ============
 */
-idVarDef *idProgram::AllocVarDef(idTypeDef *type, const char *name, idVarDef *scope) {
-	idVarDef	*def;
-
-	def = new idVarDef( type );
+idVarDef *idProgram::CreateDef( idTypeDef *type, const char *name, idVarDef *scope ) {
+	idVarDef *def = new idVarDef( type );
 	def->scope		= scope;
 	def->numUsers	= 1;
 	def->num		= varDefs.Append( def );
-
-	// add the def to the list with defs with this name and set the name pointer
 	AddDefToNameList( def, name );
-
 	return def;
+}
+
+/*
+============
+idProgram::AllocVectorComponents
+
+DUDE: storage for a vector variable outside an object, and its name_x, name_y and name_z.
+A script float takes a whole pointer-sized slot (8 bytes on a 64-bit build) while a vector
+packs its three floats, so the components cannot be three floats of their own: the vector
+gets its memory - on its function's stack, or among the globals - and each component points
+into it, one float apart. The components have a float type of their own, "vector float".
+============
+*/
+void idProgram::AllocVectorComponents( idVarDef *vec, idTypeDef *type, idVarDef *scope ) {
+	const bool onStack = ( scope->Type() == ev_function );
+	if ( onStack ) {
+		vec->value.stackOffset	= scope->value.functionPtr->locals;
+		vec->initialized		= idVarDef::stackVariable;
+		scope->value.functionPtr->locals += type->Size();
+	} else {
+		vec->value.bytePtr = ReserveGlobals( type->Size() );
+	}
+
+	idTypeDef componentDecl( ev_float, &def_float, "vector float", 0, NULL );
+	idTypeDef *componentType = GetType( componentDecl, true );
+	static const char axisNames[ 3 ] = { 'x', 'y', 'z' };
+	for ( int axis = 0; axis < 3; axis++ ) {
+		const idStr componentName = va( "%s_%c", vec->Name(), axisNames[ axis ] );
+		idVarDef *component = CreateDef( componentType, componentName, scope );
+		const int offset = axis * (int)sizeof( float );
+		if ( onStack ) {
+			component->value.stackOffset = vec->value.stackOffset + offset;
+		} else {
+			component->value.bytePtr = vec->value.bytePtr + offset;
+		}
+		component->initialized = vec->initialized;
+	}
 }
 
 /*
@@ -1532,13 +1564,9 @@ idProgram::AllocDef
 */
 idVarDef *idProgram::AllocDef( idTypeDef *type, const char *name, idVarDef *scope, bool constant ) {
 	idVarDef	*def;
-	idStr		element;
-	idVarDef	*def_x;
-	idVarDef	*def_y;
-	idVarDef	*def_z;
 
 	// allocate a new def
-	def = AllocVarDef(type, name, scope);
+	def = CreateDef( type, name, scope );
 
 	if ( ( type->Type() == ev_vector ) || ( ( type->Type() == ev_field ) && ( type->FieldType()->Type() == ev_vector ) ) ) {
 		//
@@ -1551,61 +1579,22 @@ idVarDef *idProgram::AllocDef( idTypeDef *type, const char *name, idVarDef *scop
 			def->initialized		= idVarDef::stackVariable;
 			scope->value.functionPtr->locals += type->Size();
 		} else if ( scope->TypeDef()->Inherits( &type_object ) ) {
-			idTypeDef	newtype( ev_field, NULL, "float field", 0, &type_float );
-			idTypeDef	*ftype = GetType( newtype, true );
-
 			// set the value to the variable's position in the object
 			def->value.ptrOffset = scope->TypeDef()->Size();
 
 			// make automatic defs for the vectors elements
 			// origin can be accessed as origin_x, origin_y, and origin_z
-			sprintf( element, "%s_x", def->Name() );
-			def_x = AllocDef( ftype, element, scope, constant );
-
-			sprintf( element, "%s_y", def->Name() );
-			def_y = AllocDef( ftype, element, scope, constant );
-			def_y->value.ptrOffset = def_x->value.ptrOffset + sizeof(float);
-
-			sprintf( element, "%s_z", def->Name() );
-			def_z = AllocDef( ftype, element, scope, constant );
-			def_z->value.ptrOffset = def_y->value.ptrOffset + sizeof(float);
-		} else {
-			idTypeDef	newtype( ev_float, &def_float, "vector float", 0, NULL );
-			idTypeDef	*ftype = GetType( newtype, true );
-
-			// make automatic defs for the vectors elements
-			// origin can be accessed as origin_x, origin_y, and origin_z
-			sprintf( element, "%s_x", def->Name() );
-			def_x = AllocVarDef( ftype, element, scope );
-
-			sprintf( element, "%s_y", def->Name() );
-			def_y = AllocVarDef( ftype, element, scope );
-
-			sprintf( element, "%s_z", def->Name() );
-			def_z = AllocVarDef( ftype, element, scope );
-
-			// get the memory for the full vector and point the _x, _y and _z
-			// defs at the vector member offsets
-			if ( scope->Type() == ev_function ) {
-				// vector on stack
-				def->value.stackOffset	= scope->value.functionPtr->locals;
-				def->initialized		= idVarDef::stackVariable;
-				scope->value.functionPtr->locals += type->Size();
-
-				def_x->value.stackOffset = def->value.stackOffset;
-				def_y->value.stackOffset = def_x->value.stackOffset + sizeof(float);
-				def_z->value.stackOffset = def_y->value.stackOffset + sizeof(float);
-			} else {
-				// global vector
-				def->value.bytePtr		= ReserveMem(type->Size());
-				def_x->value.bytePtr	= def->value.bytePtr;
-				def_y->value.bytePtr	= def_x->value.bytePtr + sizeof(float);
-				def_z->value.bytePtr	= def_y->value.bytePtr + sizeof(float);
+			// DUDE: as float fields one float apart (a float field on its own takes a whole slot)
+			idTypeDef	fieldDecl( ev_field, NULL, "float field", 0, &type_float );
+			idTypeDef	*fieldType = GetType( fieldDecl, true );
+			static const char axisNames[ 3 ] = { 'x', 'y', 'z' };
+			for ( int axis = 0; axis < 3; axis++ ) {
+				const idStr componentName = va( "%s_%c", def->Name(), axisNames[ axis ] );
+				idVarDef *component = AllocDef( fieldType, componentName, scope, constant );
+				component->value.ptrOffset = def->value.ptrOffset + axis * (int)sizeof( float );
 			}
-
-			def_x->initialized = def->initialized;
-			def_y->initialized = def->initialized;
-			def_z->initialized = def->initialized;
+		} else {
+			AllocVectorComponents( def, type, scope );
 		}
 	} else if ( scope->TypeDef()->Inherits( &type_object ) ) {
 		//
@@ -1632,7 +1621,7 @@ idVarDef *idProgram::AllocDef( idTypeDef *type, const char *name, idVarDef *scop
 		//
 		// global variable
 		//
-		def->value.bytePtr = ReserveMem(def->TypeDef()->Size());
+		def->value.bytePtr = ReserveGlobals( def->TypeDef()->Size() );
 	}
 
 	return def;

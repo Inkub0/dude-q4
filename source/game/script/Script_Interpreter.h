@@ -3,6 +3,8 @@
 #define __SCRIPT_INTERPRETER_H__
 
 #define MAX_STACK_DEPTH 	64
+// DUDE: twice Raven's 6144 bytes - every stack value takes whole pointer-sized slots on a
+// 64-bit build (see idInterpreter::Push), so the same scripts need about twice the room
 #define LOCALSTACK_SIZE 	(6144 * 2)
 
 typedef struct prstack_s {
@@ -37,7 +39,7 @@ private:
 public:
 	void				PushString( const char *string );
 	void				PushVector( const idVec3 &vector );
-	void				Push( intptr_t value );
+	void				Push( int value );
 private:
 // RAVEN END
 	const char			*FloatToString( float value );
@@ -119,44 +121,31 @@ ID_INLINE void idInterpreter::PopParms( int numParms ) {
 idInterpreter::Push
 ====================
 */
-ID_INLINE void idInterpreter::Push( intptr_t value ) {
+ID_INLINE void idInterpreter::Push( int value ) {
+	// DUDE: a value on the script stack fills one pointer-sized slot, the size the compiler
+	// gives int, float, entity and the other one-word types (Script_Program.cpp), so offsets
+	// stay pointer-aligned on a 64-bit build. The 32-bit value goes at the start of its slot,
+	// where everything that reads the stack (CallEvent, the opcodes) looks for it.
 	if ( localstackUsed + sizeof( intptr_t ) > LOCALSTACK_SIZE ) {
 		Error( "Push: locals stack overflow\n" );
 	}
-	// DG: fix for 64bit Big Endian machines
-	//*( intptr_t * )&localstack[ localstackUsed ]	= value;
-	int val = value;
-	assert(value == val && "I really assumed that value would always fit into 32bit");
-	// dhewm3 used to store these values on localstack[] as intptr_t, even though
-	// they always seem to be int32. Unfortunately, all the code reading localstack[]
-	// gets the pointer to &localstack[ localstackUsed ] and then interprets that
-	// as int* or float* or whatever.
-	// So with 64bit machines it's stored as the wrong size (intptr_t is int64, int is int32),
-	// and on Big Endian the values are just 0 (or UINT_MAX if value < 0) - on Little Endian
-	// the first 4 bytes are the ones with actual data so the bug was hidden).
-	// To fix this, now a regular itn is stored at `&localstack[ localstackUsed ]`,
-	// as expected by the code using localstack[].
-	// TODO: once this has been tested more (and the assertion above has never triggered),
-	//       change idInterpreter::Push() to take a regular int argument instead of intptr_t.
-	int *stackVar = ( int * )&localstack[ localstackUsed ];
-	*stackVar = val;
-
-	// even though a 32bit int is put onto the stack, increase it by sizeof(intptr_t)
-	// so it remains aligned to multiples of the native pointer size
+	memcpy( &localstack[ localstackUsed ], &value, sizeof( value ) );
 	localstackUsed += sizeof( intptr_t );
 }
 
 /*
 ====================
 idInterpreter::PushVector
+
+DUDE: a vector takes EVENT_VEC3_SIZE bytes, its three floats then padding to whole slots
 ====================
 */
 ID_INLINE void idInterpreter::PushVector( const idVec3 &vector ) {
-	if ( localstackUsed + E_EVENT_SIZEOF_VEC > LOCALSTACK_SIZE ) {
+	if ( localstackUsed + EVENT_VEC3_SIZE > LOCALSTACK_SIZE ) {
 		Error( "Push: locals stack overflow\n" );
 	}
-	*( idVec3 * )&localstack[ localstackUsed ] = vector;
-	localstackUsed += E_EVENT_SIZEOF_VEC;
+	memcpy( &localstack[ localstackUsed ], vector.ToFloatPtr(), sizeof( idVec3 ) );
+	localstackUsed += EVENT_VEC3_SIZE;
 }
 
 /*

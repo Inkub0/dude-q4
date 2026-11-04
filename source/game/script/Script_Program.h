@@ -566,8 +566,9 @@ private:
 	int											top_files;
 
 	void										CompileStats( void );
-	byte										*ReserveMem(int size);
-	idVarDef									*AllocVarDef(idTypeDef *type, const char *name, idVarDef *scope);
+	byte										*ReserveGlobals( int size );
+	idVarDef									*CreateDef( idTypeDef *type, const char *name, idVarDef *scope );
+	void										AllocVectorComponents( idVarDef *vec, idTypeDef *type, idVarDef *scope );
 
 public:
 	idVarDef									*returnDef;

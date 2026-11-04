@@ -775,22 +775,14 @@ void idInterpreter::CallEvent( const function_t *func, int argsize ) {
 		switch( format[ i ] ) {
 		case D_EVENT_INTEGER :
 			var.intPtr = ( int * )&localstack[ start + pos ];
-			//( *( int * )&data[ i ] ) = int( *var.floatPtr );
-			// DG: for int/intrptr_t arguments, the callbacks from Callbacks.cpp pass
-			//     data[i] directly, not *(int*)&data[i] or some nonsense like that
-			//     so the integer must be assigned to the intptr_t for the value to be
-			//     passed correctly, esp. on 64bit Big Endian machines.
+			// DUDE: an integer argument is the whole intptr_t slot (the event callers pass
+			// data[ i ] itself), so assign it - writing only its first bytes leaves the rest stale
 			data[ i ] = int( *var.floatPtr );
 			break;
 
 		case D_EVENT_FLOAT :
 			var.intPtr = ( int * )&localstack[ start + pos ];
-			// NOTE: floats are the only type not passed as int or pointer in intptr_t,
-			//       but as float-data in the first 4 bytes of data[i].
-			//       So (unlike in the other cases), here this awkward code casting &data[i]
-			//       to another pointer type is actually necessary (same in CallSysEvent()).
-			//       In the other cases one could also use `data[i] = (intptr_t)var.blaPtr;`
-			//       (not doing those changes here now to minimize potential merge conflicts)
+			// a float travels as its bits at the start of the slot (EventParm in Class.cpp)
 			( *( float * )&data[ i ] ) = *var.floatPtr;
 			break;
 
@@ -915,11 +907,7 @@ void idInterpreter::CallSysEvent( const function_t *func, int argsize ) {
 		switch( format[ i ] ) {
 		case D_EVENT_INTEGER :
 			source.intPtr = ( int * )&localstack[ start + pos ];
-			//*( int * )&data[ i ] = int( *source.floatPtr );
-			// DG: for int/intrptr_t arguments, the callbacks from Callbacks.cpp pass
-			//     data[i] directly, not *(int*)&data[i] or some nonsense like that
-			//     so the integer must be assigned to the intptr_t for the value to be
-			//     passed correctly, esp. on 64bit Big Endian machines.
+			// DUDE: the whole slot, as in CallEvent
 			data[ i ] = int( *source.floatPtr );
 			break;
 

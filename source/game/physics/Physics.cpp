@@ -50,7 +50,7 @@ int idPhysics::SnapTimeToPhysicsFrame( int t ) {
 	int s;
 // RAVEN BEGIN
 // bdube: use GetMSec access rather than USERCMD_TIME
-	// DUDE: the nominal frame length - gameLocal.msec now alternates (CalcMSec); dhewm3 keeps
+	// DUDE: the nominal frame length - gameLocal.msec now alternates (FrameLengthMs); dhewm3 keeps
 	// USERCMD_MSEC here as well
 	const int frameMsec = 1000 / gameLocal.GetMHz();
 	s = t + frameMsec - 1;

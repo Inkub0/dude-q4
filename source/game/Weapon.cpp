@@ -2687,21 +2687,26 @@ void rvWeapon::LaunchProjectiles ( idDict& dict, const idVec3& muzzleOrigin, con
 			idVec3  start;
 			float   distance;
 			trace_t	tr;
-			// DUDE (dhewm3 b03fc927): ownerBounds - projBounds is only a box when the projectile is
-			// smaller than the owner on every axis (idBounds::operator- asserts, else an inverted box)
-			const idVec3 obDiff = ownerBounds[1] - ownerBounds[0];
-			const idVec3 pbDiff = projBounds[1] - projBounds[0];
-			const bool boundsSubLegal = obDiff.x > pbDiff.x && obDiff.y > pbDiff.y && obDiff.z > pbDiff.z;
+			// DUDE: ownerBounds - projBounds (the room the projectile's centre has inside its owner)
+			// is a box only while the projectile is the smaller of the two on every axis; for a
+			// wider one idBounds asserts and the ray test reads a box turned inside out. Such a
+			// projectile starts from the owner's centre (dhewm3 fixed id's copy, b03fc927).
+			const idVec3 ownerSize = ownerBounds.Size();
+			const idVec3 projSize = projBounds.Size();
+			bool projectileFits = true;
+			for ( int axis = 0; axis < 3; axis++ ) {
+				projectileFits = projectileFits && projSize[ axis ] < ownerSize[ axis ];
+			}
 //RAVEN BEGIN
 //asalmon: xbox must use muzzle Axis for aim assistance
 #ifdef _XBOX
 			muzzle_pos = muzzleOrigin + muzzleAxis[ 0 ] * 2.0f;
-			if ( boundsSubLegal && ( ownerBounds - projBounds).RayIntersection( muzzle_pos, muzzleAxis[0], distance ) ) {
+			if ( projectileFits && ( ownerBounds - projBounds).RayIntersection( muzzle_pos, muzzleAxis[0], distance ) ) {
 				start = muzzle_pos + distance * muzzleAxis[0];
 			} 
 #else
 			muzzle_pos = muzzleOrigin + playerViewAxis[ 0 ] * 2.0f;
-			if ( boundsSubLegal && ( ownerBounds - projBounds).RayIntersection( muzzle_pos, playerViewAxis[0], distance ) ) {
+			if ( projectileFits && ( ownerBounds - projBounds).RayIntersection( muzzle_pos, playerViewAxis[0], distance ) ) {
 				start = muzzle_pos + distance * playerViewAxis[0];
 			} 
 #endif

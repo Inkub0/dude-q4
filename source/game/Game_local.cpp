@@ -3459,15 +3459,19 @@ void idGameLocal::MenuFrame( void ) { }
 
 /*
 ================
-CalcMSec
+FrameLengthMs
 
-DUDE (dhewm3 abd8d4ac, dezo2/DG): this frame's length, 1000/hz or 1000/hz + 1 (16 or 17 ms at
-60 Hz), so that hz frames add up to exactly 1000 ms. A constant 16 ms made a second of game time
-960 ms of real time: cinematics and animations ran slow and drifted from their audio.
+DUDE: how long game frame number 'frame' lasts at 'hz' frames per second, in whole
+milliseconds. Frame n ends at the millisecond n * 1000 / hz (rounded down), so at 60 Hz the
+lengths run 16, 17, 17, 16, 17, 17 ... and every 60 frames add up to exactly 1000 ms. Raven
+used a constant 16 ms (60 frames = 960 ms), which ran cinematics and animations 4 % slow
+against their audio; dhewm3 made the same change to Doom 3 (abd8d4ac).
 ================
 */
-static int CalcMSec( long long framenum, int hz ) {
-	return int( ( framenum * 1000LL ) / hz - ( ( framenum - 1 ) * 1000LL ) / hz );
+static int FrameLengthMs( long long frame, int hz ) {
+	const long long endMs = frame * 1000LL / hz;
+	const long long startMs = ( frame - 1 ) * 1000LL / hz;
+	return (int)( endMs - startMs );
 }
 
 /*
@@ -3509,7 +3513,7 @@ idGameLocal::RunFrame
 		framenum++;
 		previousTime = time;
 		// bdube: use GetMSec access rather than USERCMD_TIME
-		msec = CalcMSec( framenum, mHz );		// DUDE: recalculated each frame, see CalcMSec
+		msec = FrameLengthMs( framenum, mHz );		// DUDE: 16 or 17 at 60 Hz, see FrameLengthMs
 		time += GetMSec();
 
 		realClientTime = time;
