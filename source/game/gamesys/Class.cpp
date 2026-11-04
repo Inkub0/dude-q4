@@ -16,6 +16,11 @@ instancing of objects.
 #include "NoGameTypeInfo.h"
 #endif
 
+#include <array>
+#include <cstring>
+#include <type_traits>
+#include <utility>
+
 /***********************************************************************
 
   idTypeInfo
@@ -972,6 +977,88 @@ bool idClass::ProcessEvent( const idEventDef *ev, idEventArg arg1, idEventArg ar
 }
 
 /*
+===============================================================================
+
+	Event function callers (DUDE)
+
+	An event function takes up to D_EVENT_MAXARGS arguments, and each one arrives in one
+	intptr_t of the event data: integers, entities and the pointers to strings, vectors and
+	traces as the value itself, a float as its bits at the start of the slot. Event functions
+	declare each parameter either as a float or as something intptr_t-sized, and the call
+	has to use exactly those types: x86-64 and Win64 pass floats in other registers than
+	integers. An event's format index holds its argument count (the bit at numargs +
+	D_EVENT_MAXARGS) and which arguments are floats (bit i for argument i).
+
+	The compiler builds one caller per argument count and float pattern from the templates
+	below (511 for 8 arguments) into one table per count. This replaces the generated switch
+	statement (Callbacks.cpp) the SDK kept.
+
+===============================================================================
+*/
+
+namespace {
+
+typedef void ( *eventCaller_t )( idClass *object, eventCallback_t callback, const intptr_t *data );
+
+// the type of parameter I when the bits of FLOATS mark the float parameters
+template<unsigned int FLOATS, int I>
+using eventParm_t = typename std::conditional<( ( FLOATS >> I ) & 1u ) != 0, float, intptr_t>::type;
+
+// parameter I read out of its data slot
+template<unsigned int FLOATS, int I>
+ID_INLINE eventParm_t<FLOATS, I> EventParm( const intptr_t *data ) {
+	if constexpr ( ( ( FLOATS >> I ) & 1u ) != 0 ) {
+		float value;
+		memcpy( &value, &data[ I ], sizeof( value ) );
+		return value;
+	} else {
+		return data[ I ];
+	}
+}
+
+template<unsigned int FLOATS, int... I>
+void CallEventFunction( idClass *object, eventCallback_t callback, const intptr_t *data, std::integer_sequence<int, I...> ) {
+	typedef void ( idClass::*typedCallback_t )( const eventParm_t<FLOATS, I>... );
+	( object->*reinterpret_cast<typedCallback_t>( callback ) )( EventParm<FLOATS, I>( data )... );
+}
+
+template<int NUMARGS, unsigned int FLOATS>
+void EventCaller( idClass *object, eventCallback_t callback, const intptr_t *data ) {
+	CallEventFunction<FLOATS>( object, callback, data, std::make_integer_sequence<int, NUMARGS>() );
+}
+
+// every caller for NUMARGS arguments, indexed by float pattern
+template<int NUMARGS, unsigned int... FLOATS>
+constexpr std::array<eventCaller_t, sizeof...( FLOATS )> EventCallerRow( std::integer_sequence<unsigned int, FLOATS...> ) {
+	return { { &EventCaller<NUMARGS, FLOATS>... } };
+}
+
+template<int NUMARGS>
+constexpr std::array<eventCaller_t, 1u << NUMARGS> eventCallerRow =
+	EventCallerRow<NUMARGS>( std::make_integer_sequence<unsigned int, 1u << NUMARGS>() );
+
+static_assert( D_EVENT_MAXARGS == 8, "eventCallerRows lists one row per argument count" );
+const eventCaller_t *const eventCallerRows[ D_EVENT_MAXARGS + 1 ] = {
+	eventCallerRow<0>.data(), eventCallerRow<1>.data(), eventCallerRow<2>.data(),
+	eventCallerRow<3>.data(), eventCallerRow<4>.data(), eventCallerRow<5>.data(),
+	eventCallerRow<6>.data(), eventCallerRow<7>.data(), eventCallerRow<8>.data(),
+};
+
+// the caller for an event's argument count and format index, NULL if they disagree
+eventCaller_t FindEventCaller( int numArgs, unsigned int formatspecIndex ) {
+	if ( numArgs < 0 || numArgs > D_EVENT_MAXARGS ) {
+		return NULL;
+	}
+	const unsigned int floats = formatspecIndex & ( ( 1u << numArgs ) - 1u );
+	if ( formatspecIndex != ( ( 1u << ( numArgs + D_EVENT_MAXARGS ) ) | floats ) ) {
+		return NULL;
+	}
+	return eventCallerRows[ numArgs ][ floats ];
+}
+
+}
+
+/*
 ================
 idClass::ProcessEventArgPtr
 ================
@@ -1001,18 +1088,12 @@ bool idClass::ProcessEventArgPtr( const idEventDef *ev, intptr_t *data ) {
 
 	callback = c->eventMap[ num ];
 
-	switch( ev->GetFormatspecIndex() ) {
-	case 1 << D_EVENT_MAXARGS :
-		( this->*callback )();
-		break;
-
-// generated file - see CREATE_EVENT_CODE
-#include "Callbacks.cpp"
-
-	default:
+	const eventCaller_t caller = FindEventCaller( ev->GetNumArgs(), ev->GetFormatspecIndex() );
+	if ( caller == NULL ) {
 		gameLocal.Warning( "Invalid formatspec on event '%s'", ev->GetName() );
-		break;
+		return true;
 	}
+	caller( this, callback, data );
 
 	return true;
 }
