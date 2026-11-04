@@ -46,3 +46,6 @@ target_compile_options(q4base PRIVATE ${dude_defines} ${dude_flags})
 # Raven's SDK build defined Q4SDK (source/SConstruct); GAME_DLL comes with DUDE's definitions
 target_compile_definitions(q4base PRIVATE Q4SDK)
 target_link_libraries(q4base PRIVATE "${DUDE_BUILD_DIR}/libidlib.a")
+# only the code the game reaches: DUDE builds its idlib with one section per function, so the
+# linker drops the idlib functions this library never calls (GPL code it would only carry)
+target_link_options(q4base PRIVATE -Wl,--gc-sections)
