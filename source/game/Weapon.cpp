@@ -342,7 +342,117 @@ void rvViewWeapon::PresentWeapon( bool showViewModel ) {
 		FreeModelDef();
 	}
 
+	// DUDE: com_interpolate: this tic's gun and view lights, relative to this tic's eye
+	idPlayer *owner = weapon->GetOwner();
+	if ( owner ) {
+		if ( modelDefHandle != -1 ) {
+			renderInterpView.Capture( renderEntity.origin, renderEntity.axis, owner->firstPersonViewOrigin, owner->firstPersonViewAxis );
+		}
+		weapon->CaptureViewLights( owner->firstPersonViewOrigin, owner->firstPersonViewAxis );
+	}
+
 	UpdateSound();
+}
+
+/*
+================
+rvEyeRelativeInterp
+
+DUDE: com_interpolate, see Weapon.h
+================
+*/
+void rvEyeRelativeInterp::Clear( void ) {
+	originPrev.Zero();
+	originCur.Zero();
+	axisPrev.Identity();
+	axisCur.Identity();
+	time = -1;
+	applied = false;
+}
+
+void rvEyeRelativeInterp::Capture( const idVec3 &origin, const idMat3 &axis, const idVec3 &eyeOrigin, const idMat3 &eyeAxis ) {
+	// world -> eye space: ( p - o ) * axis^T
+	const idMat3 eyeAxisT = eyeAxis.Transpose();
+	const idVec3 localOrigin = ( origin - eyeOrigin ) * eyeAxisT;
+	const idMat3 localAxis = axis * eyeAxisT;
+
+	bool snap = false;
+	if ( time != gameLocal.time ) {
+		// age the history once per tic; a sample older than the previous tic is no start to blend from
+		snap = ( time < 0 || time != gameLocal.previousTime );
+		originPrev = originCur;
+		axisPrev = axisCur;
+		time = gameLocal.time;
+	}
+	originCur = localOrigin;
+	axisCur = localAxis;
+	applied = false;	// the def gets this tic's transform
+
+	// don't blend across a weapon switch or any other jump
+	if ( snap || ( originCur - originPrev ).LengthSqr() > Square( RENDER_INTERP_TELEPORT_DIST ) ) {
+		originPrev = originCur;
+		axisPrev = axisCur;
+	}
+}
+
+bool rvEyeRelativeInterp::Blend( float frac, const idVec3 &eyeOrigin, const idMat3 &eyeAxis, idVec3 &origin, idMat3 &axis ) const {
+	if ( time != gameLocal.time ) {
+		return false;
+	}
+	const idVec3 localOrigin = originPrev + frac * ( originCur - originPrev );
+	idMat3 localAxis;
+	if ( axisPrev.Compare( axisCur ) ) {
+		localAxis = axisCur;
+	} else {
+		idQuat q;
+		q.Slerp( axisPrev.ToQuat(), axisCur.ToQuat(), frac );
+		localAxis = q.ToMat3();
+	}
+	// eye space -> world: o + p * axis
+	axis = localAxis * eyeAxis;
+	origin = eyeOrigin + localOrigin * eyeAxis;
+	return true;
+}
+
+/*
+================
+rvViewWeapon::InterpolateViewWeapon
+
+DUDE: com_interpolate: interpolate the view model *relative to the interpolated eye*, not as an
+independent world transform. The gun sits inches from the camera, so blending its world transform on
+its own lets its orientation relative to the eye drift between rendered frames, and with real-time aim
+(com_interpolateAim) the gun would trail the view by a tic. Blending its eye-space offset and
+recomposing it onto the eye this frame renders keeps it locked to the view. The lights that follow the
+gun (display glow, muzzle flash, flashlight) are moved the same way, so a display doesn't slip out of
+its tiny glow light and the flashlight beam doesn't swim. Purely visual: firing still happens at the
+game tic. The skeletal pose is interpolated by the render callback (com_interpolateAnim).
+================
+*/
+void rvViewWeapon::InterpolateViewWeapon( float frac ) {
+	if ( !weapon ) {
+		return;
+	}
+	idPlayer *owner = weapon->GetOwner();
+	const renderView_t *rv = owner ? owner->GetRenderView() : NULL;
+	const bool active = ( rv != NULL && owner->renderViewInterpolatable && owner->firstPersonViewTime == gameLocal.time );
+
+	if ( modelDefHandle != -1 ) {
+		renderEntity_t lerped = renderEntity;	// the authoritative renderEntity keeps the tic transform
+		if ( active && renderInterpView.Blend( frac, rv->vieworg, rv->viewaxis, lerped.origin, lerped.axis ) ) {
+			gameRenderWorld->UpdateEntityDef( modelDefHandle, &lerped );
+			renderInterpView.applied = true;
+		} else if ( renderInterpView.applied ) {
+			// not following the view this frame: back to the tic transform
+			gameRenderWorld->UpdateEntityDef( modelDefHandle, &renderEntity );
+			renderInterpView.applied = false;
+		}
+	}
+
+	if ( active ) {
+		weapon->InterpolateViewLights( frac, rv->vieworg, rv->viewaxis );
+	} else {
+		weapon->InterpolateViewLights( -1.0f, vec3_origin, mat3_identity );
+	}
 }
 
 /*
@@ -1191,6 +1301,47 @@ void rvWeapon::FreeLight ( int lightID ) {
 	if ( lightHandles[lightID] != -1 ) {
 		gameRenderWorld->FreeLightDef( lightHandles[lightID] );
 		lightHandles[lightID] = -1;
+	}
+}
+
+/*
+================
+rvWeapon::CaptureViewLights / InterpolateViewLights
+
+DUDE: com_interpolate: the lights seen in the player's own view follow the view model; they are
+snapshotted relative to the eye each tic and re-presented relative to the eye each rendered frame, like
+the gun (see rvViewWeapon::InterpolateViewWeapon). The world-model copies only show in other views.
+================
+*/
+static const int viewInterpLights[] = { rvWeapon::WPLIGHT_GUI, rvWeapon::WPLIGHT_MUZZLEFLASH, rvWeapon::WPLIGHT_FLASHLIGHT };
+
+void rvWeapon::CaptureViewLights( const idVec3 &eyeOrigin, const idMat3 &eyeAxis ) {
+	for ( int i = 0; i < (int)( sizeof( viewInterpLights ) / sizeof( viewInterpLights[0] ) ); i++ ) {
+		const int lightID = viewInterpLights[i];
+		if ( lightHandles[lightID] != -1 ) {
+			lightInterp[lightID].Capture( lights[lightID].origin, lights[lightID].axis, eyeOrigin, eyeAxis );
+		} else {
+			lightInterp[lightID].Clear();
+		}
+	}
+}
+
+void rvWeapon::InterpolateViewLights( float frac, const idVec3 &eyeOrigin, const idMat3 &eyeAxis ) {
+	for ( int i = 0; i < (int)( sizeof( viewInterpLights ) / sizeof( viewInterpLights[0] ) ); i++ ) {
+		const int lightID = viewInterpLights[i];
+		rvEyeRelativeInterp &interp = lightInterp[lightID];
+		if ( lightHandles[lightID] == -1 ) {
+			continue;
+		}
+		renderLight_t lerped = lights[lightID];	// keep shader / radius / ids; override the transform
+		if ( frac >= 0.0f && interp.Blend( frac, eyeOrigin, eyeAxis, lerped.origin, lerped.axis ) ) {
+			gameRenderWorld->UpdateLightDef( lightHandles[lightID], &lerped );
+			interp.applied = true;
+		} else if ( interp.applied ) {
+			// not following the view this frame (frac < 0) or no sample from this tic: back to the tic transform
+			gameRenderWorld->UpdateLightDef( lightHandles[lightID], &lights[lightID] );
+			interp.applied = false;
+		}
 	}
 }
 

@@ -508,6 +508,16 @@ idEntity::idEntity() {
 
 	memset( &renderEntity, 0, sizeof( renderEntity ) );
 	modelDefHandle	= -1;
+	// DUDE: com_interpolate render interpolation state (never saved)
+	renderInterpOriginPrev.Zero();
+	renderInterpOriginCur.Zero();
+	renderInterpAxisPrev.Identity();
+	renderInterpAxisCur.Identity();
+	renderInterpOriginPrev2.Zero();
+	renderInterpAxisPrev2.Identity();
+	renderInterpHistCount = 0;
+	renderInterpSnapshotTime = -1;
+	renderInterpListedFrame = -1;
 	memset( &refSound, 0, sizeof( refSound ) );
 	refSound.referenceSoundHandle = -1;
 
@@ -1641,12 +1651,171 @@ void idEntity::Present( void ) {
 		return;
 	}
 
+	// DUDE: remember the transform committed at this tic for sub-tic render interpolation (com_interpolate)
+	SnapshotRenderTransform();
+
 	// add to refresh list
 	if ( modelDefHandle == -1 ) {
 		modelDefHandle = gameRenderWorld->AddEntityDef( &renderEntity );
 	} else {
 		gameRenderWorld->UpdateEntityDef( modelDefHandle, &renderEntity );
 	}	
+}
+
+/*
+================
+idEntity::SnapshotRenderTransform
+
+DUDE: com_interpolate: rotate the previous/current tic snapshots of the render transform about to be
+committed to the render world. idGameLocal::InterpolateRenderEntities uses the pair to re-present this
+entity between tics at a sub-tic blend, so world entities glide instead of stepping at the fixed 60 Hz
+sim rate when rendering faster. Idempotent within a tic: repeated commits in the same tic only refresh
+the current snapshot.
+================
+*/
+void idEntity::SnapshotRenderTransform( void ) {
+	if ( renderInterpSnapshotTime != gameLocal.time ) {
+		if ( renderInterpSnapshotTime < 0 ) {
+			// first commit (spawn or savegame restore): no previous state to blend from
+			renderInterpOriginPrev = renderEntity.origin;
+			renderInterpAxisPrev = renderEntity.axis;
+			renderInterpOriginPrev2 = renderEntity.origin;
+			renderInterpAxisPrev2 = renderEntity.axis;
+			renderInterpHistCount = 1;
+		} else {
+			// age the history one tic: Prev2 <- Prev <- Cur
+			renderInterpOriginPrev2 = renderInterpOriginPrev;
+			renderInterpAxisPrev2 = renderInterpAxisPrev;
+			renderInterpOriginPrev = renderInterpOriginCur;
+			renderInterpAxisPrev = renderInterpAxisCur;
+			if ( renderInterpHistCount < 2 ) {
+				renderInterpHistCount++;
+			}
+		}
+		renderInterpSnapshotTime = gameLocal.time;
+		gameLocal.RegisterRenderInterpolation( this );
+	}
+	renderInterpOriginCur = renderEntity.origin;
+	renderInterpAxisCur = renderEntity.axis;
+
+	// don't glide across teleports and other discontinuities; drop the stale history so the next
+	// frames blend forward from here (and can't curve off a pre-teleport sample)
+	if ( ( renderInterpOriginCur - renderInterpOriginPrev ).LengthSqr() > Square( RENDER_INTERP_TELEPORT_DIST ) ) {
+		renderInterpOriginPrev = renderInterpOriginCur;
+		renderInterpAxisPrev = renderInterpAxisCur;
+		renderInterpOriginPrev2 = renderInterpOriginCur;
+		renderInterpAxisPrev2 = renderInterpAxisCur;
+		renderInterpHistCount = 1;
+	}
+}
+
+/*
+================
+RenderInterpMonotoneTangents
+
+DUDE: com_interpolateCubic: limits the Hermite tangents m0 (at p0) and m1 (at p1) per axis so the cubic
+segment from p0 to p1 is monotone (Fritsch-Carlson) and so can't overshoot either sample: zero on an
+axis that doesn't move or whose tangent points against the segment, and scaled back into the monotone
+region (alpha^2 + beta^2 <= 9) where the tic before moved much faster. Leaves constant-velocity motion
+unchanged.
+================
+*/
+static void RenderInterpMonotoneTangents( const idVec3 &p0, const idVec3 &p1, idVec3 &m0, idVec3 &m1 ) {
+	for ( int i = 0; i < 3; i++ ) {
+		const float delta = p1[i] - p0[i];
+		if ( delta == 0.0f ) {
+			m0[i] = 0.0f;
+			m1[i] = 0.0f;
+			continue;
+		}
+		const float alpha = ( m0[i] * delta > 0.0f ) ? m0[i] / delta : 0.0f;
+		const float beta = ( m1[i] * delta > 0.0f ) ? m1[i] / delta : 0.0f;
+		const float lenSqr = alpha * alpha + beta * beta;
+		const float tau = ( lenSqr > 9.0f ) ? 3.0f / idMath::Sqrt( lenSqr ) : 1.0f;
+		m0[i] = tau * alpha * delta;
+		m1[i] = tau * beta * delta;
+	}
+}
+
+/*
+================
+RenderInterpBlendTransform
+
+DUDE: com_interpolate: the transform frac of the way from the previous tic (prev) to the current one
+(cur); cubic Hermite with monotone tangents when there are two tics of history and
+com_interpolateCubic is on, else linear. Shared by entities and client entities.
+================
+*/
+void RenderInterpBlendTransform( const idVec3 &orgPrev2, const idVec3 &orgPrev, const idVec3 &orgCur,
+		const idMat3 &axisPrev, const idMat3 &axisCur, int histCount, float frac, idVec3 &origin, idMat3 &axis ) {
+	// position: frac stays in [0,1] between the last two committed tics (no extrapolation); the
+	// monotone tangents keep the curve inside the range of its two tic samples (a monster stepping
+	// up a stair would otherwise rise above the step and sink back)
+	if ( gameLocal.renderInterpCubic && histCount >= 2 ) {
+		idVec3 m0 = ( orgCur - orgPrev2 ) * 0.5f;	// centered tangent at Prev
+		idVec3 m1 = orgCur - orgPrev;				// tangent at Cur
+		RenderInterpMonotoneTangents( orgPrev, orgCur, m0, m1 );
+		const float t2 = frac * frac;
+		const float t3 = t2 * frac;
+		origin = orgPrev * ( 2.0f * t3 - 3.0f * t2 + 1.0f )
+			+ m0 * ( t3 - 2.0f * t2 + frac )
+			+ orgCur * ( -2.0f * t3 + 3.0f * t2 )
+			+ m1 * ( t3 - t2 );
+	} else {
+		origin = orgPrev + frac * ( orgCur - orgPrev );
+	}
+
+	if ( axisPrev.Compare( axisCur ) ) {
+		axis = axisCur;
+	} else {
+		idQuat q;
+		q.Slerp( axisPrev.ToQuat(), axisCur.ToQuat(), frac );
+		axis = q.ToMat3();
+	}
+}
+
+/*
+================
+idEntity::PresentInterpolated
+
+DUDE: called once per *rendered* frame between game tics (com_interpolate). Re-presents the render
+entity at a transform blended between the previous and current tic, matching
+idPlayer::InterpolateRenderView: renders up to one tic (~16.7ms) in the past, never extrapolates.
+Recomputes from the stable snapshots each call (idempotent) and passes a temporary copy so the
+authoritative renderEntity keeps the exact tic state (restored by RestoreRenderTransform).
+================
+*/
+void idEntity::PresentInterpolated( float frac ) {
+	// only entities whose transform was committed during the current tic have a valid pair to
+	// blend; stale entries (entity stopped presenting) keep their authoritative transform
+	if ( modelDefHandle == -1 || renderInterpSnapshotTime != gameLocal.time ) {
+		return;
+	}
+
+	// didn't move this tic
+	if ( renderInterpOriginCur.Compare( renderInterpOriginPrev ) && renderInterpAxisCur.Compare( renderInterpAxisPrev ) ) {
+		return;
+	}
+
+	renderEntity_t lerped = renderEntity;
+	RenderInterpBlendTransform( renderInterpOriginPrev2, renderInterpOriginPrev, renderInterpOriginCur,
+		renderInterpAxisPrev, renderInterpAxisCur, renderInterpHistCount, frac, lerped.origin, lerped.axis );
+	gameRenderWorld->UpdateEntityDef( modelDefHandle, &lerped );
+}
+
+/*
+================
+idEntity::RestoreRenderTransform
+
+DUDE: re-commits the authoritative tic-state transform after PresentInterpolated dirtied the render def
+with sub-tic blends; called by idGameLocal at the start of the next tic so entities that stop moving
+(or stop presenting) don't linger mid-blend.
+================
+*/
+void idEntity::RestoreRenderTransform( void ) {
+	if ( modelDefHandle != -1 ) {
+		gameRenderWorld->UpdateEntityDef( modelDefHandle, &renderEntity );
+	}
 }
 
 /*
@@ -1661,7 +1830,19 @@ bool idEntity::UpdateRenderEntity( renderEntity_s *renderEntity, const renderVie
 
 	idAnimator *animator = GetAnimator();
 	if ( animator ) {
-		return animator->CreateFrame( gameLocal.time, false );
+		// DUDE: com_interpolateAnim (only set while idGameLocal::Draw renders with com_interpolate):
+		// show the skeleton at the same sub-tic instant the render transform is interpolated to,
+		// blended between the final poses of the previous and current tic, so limbs - joints that walk
+		// IK, look control and ragdolls override once per tic included - move smoothly above 60fps and
+		// stay consistent with the interpolated origin. Covers the view weapon too.
+		if ( gameLocal.renderInterpAnim ) {
+			// a render transform that snapped this tic (teleport, first presentation, see
+			// SnapshotRenderTransform) restarts the pose history too
+			const bool restartHistory = ( renderInterpSnapshotTime == gameLocal.time && renderInterpHistCount < 2 );
+			return animator->CreateInterpolatedFrame( renderEntity, gameLocal.time, gameLocal.previousTime, gameLocal.renderInterpolateFrac, restartHistory );
+		}
+
+		return animator->CreateTicFrame( renderEntity, gameLocal.time );
 	}
 
 	return false;

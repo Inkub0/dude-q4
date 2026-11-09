@@ -20,6 +20,12 @@ public:
 
 	virtual void		Present				( void );
 	virtual void		Think				( void );
+
+						// DUDE: com_interpolate: re-present the render def at a transform frac of the way from
+						// the previous tic to the current one, and put the tic transform back (no-ops here;
+						// rvClientModel and rvClientMoveable have render defs)
+	virtual void		PresentInterpolated		( float frac ) { }
+	virtual void		RestoreRenderTransform	( void ) { }
 	virtual idPhysics*	GetPhysics			( void ) const;
 	virtual bool		Collide				( const trace_t &collision, const idVec3 &velocity );
 
@@ -85,6 +91,21 @@ protected:
 	jointHandle_t				bindJoint;
 	bool						bindOrientated;
 	refSound_t					refSound;
+
+	// DUDE: com_interpolate: the render def's transform as committed at the previous and current tic
+	// (see idEntity's renderInterp*); purely visual, never saved
+	idVec3						renderInterpOriginPrev2;
+	idVec3						renderInterpOriginPrev;
+	idVec3						renderInterpOriginCur;
+	idMat3						renderInterpAxisPrev;
+	idMat3						renderInterpAxisCur;
+	int							renderInterpHistCount;
+	int							renderInterpSnapshotTime;	// gameLocal.time the Cur snapshot belongs to, -1 = none
+	bool						renderInterpApplied;		// the render def holds a sub-tic transform
+
+	void						SnapshotRenderTransform		( const renderEntity_t &ent );
+	void						PresentInterpolatedDef		( int defHandle, const renderEntity_t &ent, float frac );
+	void						RestoreRenderTransformDef	( int defHandle, const renderEntity_t &ent );
 };
 
 ID_INLINE const idVec3& rvClientEntity::GetOrigin ( void ) {

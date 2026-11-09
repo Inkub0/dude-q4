@@ -33,6 +33,27 @@ class idAnimatedEntity;
 class idProjectile;
 class rvWeapon;
 
+// DUDE: com_interpolate: a view-model transform (the gun, its lights) kept relative to the first-person
+// eye at the last two tics. Blended in eye space and recomposed onto the eye the frame renders, the gun
+// stays locked to the interpolated (and real-time aimed) view instead of lagging it - and a gun display
+// seen almost edge-on keeps a steady angle to the eye. Render cache, never saved.
+class rvEyeRelativeInterp {
+public:
+	idVec3					originPrev;
+	idVec3					originCur;
+	idMat3					axisPrev;
+	idMat3					axisCur;
+	int						time;		// gameLocal.time the Cur sample belongs to, -1 = none
+	bool					applied;	// the render def holds a blended transform
+
+							rvEyeRelativeInterp( void ) { Clear(); }
+	void					Clear( void );
+							// this tic's world transform, seen from this tic's eye
+	void					Capture( const idVec3 &origin, const idMat3 &axis, const idVec3 &eyeOrigin, const idMat3 &eyeAxis );
+							// false when there's no sample from this tic
+	bool					Blend( float frac, const idVec3 &eyeOrigin, const idMat3 &eyeAxis, idVec3 &origin, idMat3 &axis ) const;
+};
+
 class rvViewWeapon : public idAnimatedEntity {
 public:
 
@@ -64,6 +85,10 @@ public:
 
 	// Visual presentation
 	void					PresentWeapon				( bool showViewModel );
+	// DUDE: com_interpolate: the view model (and its lights) follow the view interpolated this frame;
+	// the generic world-entity blend is skipped for it (it would fight the eye-relative one)
+	void					InterpolateViewWeapon		( float frac );
+	virtual void			PresentInterpolated			( float frac ) { }
 
 	// Networking
 	virtual void			WriteToSnapshot				( idBitMsgDelta &msg ) const;
@@ -102,6 +127,8 @@ private:
 	
 	friend		class rvWeapon;
 	rvWeapon*	weapon;
+
+	rvEyeRelativeInterp		renderInterpView;		// DUDE: com_interpolate, see InterpolateViewWeapon
 };
 
 class rvWeapon : public idClass {
@@ -360,6 +387,12 @@ public:
 	idVec3							muzzleFlashViewOffset;
 	bool							flashlightOn;
 	idVec3							flashlightViewOffset;	
+	rvEyeRelativeInterp				lightInterp[WPLIGHT_MAX];	// DUDE: com_interpolate, the view lights' last two tics
+
+	// DUDE: com_interpolate: snapshot / re-present the lights that follow the view model (gui glow, muzzle
+	// flash, flashlight), see rvViewWeapon::InterpolateViewWeapon
+	void							CaptureViewLights			( const idVec3 &eyeOrigin, const idMat3 &eyeAxis );
+	void							InterpolateViewLights		( float frac, const idVec3 &eyeOrigin, const idMat3 &eyeAxis );
 
 	// ammo management
 	int								ammoType;

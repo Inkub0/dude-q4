@@ -403,6 +403,57 @@ public:
 	idVec3					firstPersonViewOrigin;
 	idMat3					firstPersonViewAxis;
 
+	// DUDE: render interpolation (com_interpolate). Purely visual render caches, never saved.
+	// firstPersonView origin/axis from the previous tic, and whether this tic's renderView is a plain
+	// first-person view that may be interpolated
+	idVec3					firstPersonViewOriginPrev;
+	idMat3					firstPersonViewAxisPrev;
+	int						firstPersonViewTime;	// gameLocal.time the current firstPersonView belongs to (-1 = none):
+													// CalculateFirstPersonView can run twice in a tic (vehicles), the
+													// history ages only on the first
+	// com_interpolateAim component-separated interpolation: the mouse look (viewAngles) is advanced to
+	// real time while the view EFFECTS (bob, screen shake, kick) and the gravity axis interpolate
+	// smoothly, so they no longer step at 60Hz. Snapshotted per tic in CalculateFirstPersonView.
+	idAngles				effectViewAngles;		// this tic:  viewBobAngles + shake + playerView.AngleOffset()
+	idAngles				effectViewAnglesPrev;	// previous tic
+	idMat3					gravityViewAxis;		// this tic:  physicsObj.GetGravityAxis()
+	idMat3					gravityViewAxisPrev;	// previous tic
+	bool					effectViewSeparable;	// this tic's view is the additive on-foot GetViewPos sum
+	bool					renderViewInterpolatable;
+	// the cinematic / camera renderView from the previous and current tic: the camera steps at 60Hz
+	// while the actors glide (stage 3), so InterpolateRenderView glides it by the same frac
+	idVec3					renderViewCameraOrigin;
+	idVec3					renderViewCameraOriginPrev;
+	idMat3					renderViewCameraAxis;
+	idMat3					renderViewCameraAxisPrev;
+	// the FINAL aspect-corrected fov as GetViewParms produced it (already ran CalcFov); both are lerped
+	// directly - re-running CalcFov would double-widen on widescreen
+	float					renderViewCameraFovX;
+	float					renderViewCameraFovXPrev;
+	float					renderViewCameraFovY;
+	float					renderViewCameraFovYPrev;
+	bool					renderViewCameraInterpolatable;	// this tic's renderView came from a camera (glide it)
+	bool					renderViewHadCamera;			// previous tic was a camera view (else snap across the entry)
+	const idCamera *		renderViewCameraEntity;			// the camera that drove last tic's view (a switch forces a snap)
+	int						renderViewCameraCutSerial;		// last tic's idCamera shot serial (a hard cut forces a snap)
+	int						renderViewCameraTime;			// gameLocal.time the current camera snapshot belongs to
+	// the third-person / death-cam view: InterpolateRenderView RE-DERIVES the orbit each rendered frame
+	// from the interpolated eye and real-time view angles via ComputeThirdPersonView, re-tracing the walls
+	idAngles				renderViewOffsetViewAngles;		// this tic's raw view angles (orbit direction)
+	idAngles				renderViewOffsetViewAnglesPrev;	// previous tic
+	float					renderViewOffsetAngle;			// OffsetThirdPersonView params for this tic's mode
+	float					renderViewOffsetHeight;
+	bool					renderViewOffsetClip;
+	float					renderViewOffsetRange;			// lerped between tics (the death cam ramps it)
+	float					renderViewOffsetRangePrev;
+	float					renderViewOffsetFovX;			// final aspect-corrected fov, lerped directly
+	float					renderViewOffsetFovXPrev;
+	float					renderViewOffsetFovY;
+	float					renderViewOffsetFovYPrev;
+	bool					renderViewOffsetInterpolatable;	// this tic's renderView is a third-person / death view
+	bool					renderViewHadOffset;			// previous tic was one (else snap the orbit angles at entry)
+	int						renderViewOffsetTime;			// gameLocal.time the current offset snapshot belongs to
+
 	idDragEntity			dragEntity;
 	idVec3					intentDir;
 
@@ -502,6 +553,8 @@ public:
 	void					SmoothenRenderView( bool firstPerson );
 	void					CalculateRenderView( void );	// called every tic by player code
 	void					CalculateFirstPersonView( void );
+	void					InterpolateRenderView( float frac );	// DUDE: com_interpolate, every rendered frame (may be >1 per tic)
+	void					InterpolateViewWeapon( float frac );	// DUDE: com_interpolate, the view model follows the interpolated view
 	
 	void					DrawShadow( renderEntity_t *headRenderEnt );
 	void					DrawHUD( idUserInterface *hud );
@@ -514,7 +567,14 @@ public:
  	float					CalcFov( bool honorZoom );
 	void					CalculateViewWeaponPos( idVec3 &origin, idMat3 &axis );
 	void					GetViewPos( idVec3 &origin, idMat3 &axis ) const;
+	// DUDE: GetViewPos, also returning the view-effect angle sum it added on foot (bob, shake, kick);
+	// false when the view isn't that additive sum (dead, in a vehicle). Calls the random screen shake
+	// once, exactly like GetViewPos.
+	bool					GetViewPosEffects( idVec3 &origin, idMat3 &axis, idAngles &effectAngles ) const;
  	void					OffsetThirdPersonView( float angle, float range, float height, bool clip );
+	// DUDE: com_interpolate: pure third-person view builder shared by the per-tic OffsetThirdPersonView
+	// and the per-frame re-derivation in InterpolateRenderView
+	void					ComputeThirdPersonView( const idVec3 &eyeOrigin, const idAngles &viewAng, const idMat3 &gravityAxis, float angle, float range, float height, bool clip );
 // RAVEN BEGIN
 // jnewquist: option to avoid clipping against world
 	void					OffsetThirdPersonVehicleView	( bool clip );

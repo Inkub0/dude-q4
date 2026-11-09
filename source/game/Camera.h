@@ -18,6 +18,10 @@ public:
 	virtual void			GetViewParms( renderView_t *view ) = 0;
 	virtual renderView_t *	GetRenderView();
 	virtual void			Stop( void ){} ;
+	// DUDE: render interpolation (com_interpolate): a monotonic id for the current cinematic SHOT. It
+	// changes on a hard cut so idPlayer can snap (not smear) the interpolated camera across the cut even
+	// when the two shots are spatially close. Cameras without internal cuts keep returning 0.
+	virtual int				GetViewCutSerial( void ) const { return 0; }
 };
 
 /*
@@ -212,6 +216,7 @@ public:
 
 	void					Spawn( void );
 	virtual void			GetViewParms( renderView_t *view );
+	virtual int				GetViewCutSerial( void ) const { return viewCutSerial; }	// DUDE
 
 private:
 	int						threadNum;
@@ -221,6 +226,11 @@ private:
 	const idDeclCameraDef	*cameraDef;
 	int						lastFrame;
 	idEntityPtr<idEntity>	activator;
+	// DUDE: render interpolation (com_interpolate): bumped by GetViewParms whenever the active cut index
+	// changes, so a hard cut within this anim forces idPlayer to snap the interpolated view. Not saved (a
+	// render cache, re-established on the first GetViewParms after a restore).
+	int						lastCutIndex;
+	int						viewCutSerial;
 
 	void					Start( void );
 	void					Stop( void );

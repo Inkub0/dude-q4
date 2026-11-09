@@ -1645,6 +1645,8 @@ idCameraAnim::idCameraAnim() {
 	starttime = 0;
 	activator = NULL;
 	lastFrame = -1;
+	lastCutIndex = -1;		// DUDE: -1 so the first GetViewParms establishes the shot without a spurious bump
+	viewCutSerial = 0;
 }
 
 /*
@@ -1915,6 +1917,17 @@ void idCameraAnim::GetViewParms( renderView_t *view ) {
 		frame++;
 		cut++;
 	}
+
+	// DUDE: render interpolation (com_interpolate): note when the active shot changes so idPlayer snaps
+	// the interpolated camera across the hard cut instead of gliding through it. The first call after
+	// spawn or a restore (lastCutIndex < 0) just establishes the shot without bumping.
+	if ( cut != lastCutIndex ) {
+		if ( lastCutIndex >= 0 ) {
+			viewCutSerial++;
+		}
+		lastCutIndex = cut;
+	}
+
 	if ( lastFrame != frame ) {
 		cameraDef->GetAnim(1)->CallFrameCommands( this, lastFrame, frame );
 		lastFrame = frame;

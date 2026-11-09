@@ -414,6 +414,16 @@ public:
 	idLinkList<idEntity>	snapshotEntities;		// entities from the last snapshot
 	int						realClientTime;			// real client time
 	bool					isNewFrame;				// true if this is a new game frame, not a rerun due to prediction
+
+	// DUDE: render interpolation (com_interpolate): entities whose render transform was committed
+	// during the current tic; between tics InterpolateRenderEntities re-presents them at sub-tic
+	// blended transforms (client entities are walked through clientSpawnedEntities instead)
+	idList< idEntityPtr<idEntity> >	renderInterpEntities;
+	int						renderInterpFrameNum;	// framenum the list belongs to
+	bool					renderInterpApplied;	// true if render defs currently hold sub-tic (not tic) transforms
+	float					renderInterpolateFrac;	// this rendered frame's sub-tic alpha [0,1] (1.0 = on a tic / not interpolating)
+	bool					renderInterpCubic;		// cached com_interpolateCubic for this rendered frame
+	bool					renderInterpAnim;		// cached com_interpolateAnim for this rendered frame
 	int						entityDefBits;			// bits required to store an entity def number
 
 	static const char *		sufaceTypeNames[ MAX_SURFACE_TYPES ];	// text names for surface types
@@ -482,6 +492,11 @@ public:
 // RAVEN END
 	virtual void			RepeaterFrame( const userOrigin_t *clientOrigins, bool lastCatchupFrame, int spoolTime = 0 ) {};
 	virtual bool			Draw( int clientNum );
+
+	// DUDE: render interpolation (com_interpolate)
+	void					RegisterRenderInterpolation( idEntity *ent );
+	void					InterpolateRenderEntities( float frac );
+	void					RestoreRenderInterpolation( void );
 	virtual escReply_t		HandleESC( idUserInterface **gui );
 	virtual idUserInterface	*StartMenu( void );
 	virtual const char *	HandleGuiCommands( const char *menuCommand );

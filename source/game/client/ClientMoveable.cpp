@@ -201,12 +201,30 @@ void rvClientMoveable::Think ( void ) {
 	renderEntity.origin = worldOrigin;
 	renderEntity.axis = worldAxis * scale.GetCurrentValue( gameLocal.GetTime() );
 
+	// DUDE: remember this tic's transform for sub-tic render interpolation (com_interpolate)
+	SnapshotRenderTransform( renderEntity );
+
 	// add to refresh list
 	if ( entityDefHandle == -1 ) {
 		entityDefHandle = gameRenderWorld->AddEntityDef( &renderEntity );
 	} else {
 		gameRenderWorld->UpdateEntityDef( entityDefHandle, &renderEntity );
 	}		
+}
+
+/*
+================
+rvClientMoveable::PresentInterpolated / RestoreRenderTransform
+
+DUDE: com_interpolate, see rvClientEntity::PresentInterpolatedDef.
+================
+*/
+void rvClientMoveable::PresentInterpolated( float frac ) {
+	PresentInterpolatedDef( entityDefHandle, renderEntity, frac );
+}
+
+void rvClientMoveable::RestoreRenderTransform( void ) {
+	RestoreRenderTransformDef( entityDefHandle, renderEntity );
 }
 
 /*

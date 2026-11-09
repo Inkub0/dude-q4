@@ -30,6 +30,8 @@ public:
 	virtual void	FreeLightDef( void );
 	virtual bool	GetPhysicsToSoundTransform( idVec3 &origin, idMat3 &axis );
 	void			Present( void );
+	virtual void	PresentInterpolated( float frac );		// DUDE: com_interpolate: also blends the light def
+	virtual void	RestoreRenderTransform( void );
 
 	void			SaveState( idDict *args );
 	virtual void	SetColor( float red, float green, float blue );
@@ -76,6 +78,16 @@ private:
 	idVec3			localLightOrigin;			// light origin relative to the physics origin
 	idMat3			localLightAxis;				// light axis relative to physics axis
 	qhandle_t		lightDefHandle;				// handle to renderer light def
+
+	// DUDE: com_interpolate: renderLight transform committed at the previous/current tic, so a light
+	// bound to a mover glides with it (mirrors idEntity's renderInterp* for the model def)
+	idVec3			renderInterpLightOriginPrev;
+	idVec3			renderInterpLightOriginCur;
+	idMat3			renderInterpLightAxisPrev;
+	idMat3			renderInterpLightAxisCur;
+	int				renderInterpLightSnapshotTime;
+	bool			renderInterpLightApplied;	// the light def holds a sub-tic transform
+
 	idStr			brokenModel;
 	int				levels;
 	int				currentLevel;

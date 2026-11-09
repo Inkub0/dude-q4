@@ -28,6 +28,89 @@ rvClientEntity::rvClientEntity( void ) {
 	
 	memset( &refSound, 0, sizeof(refSound) );
 	refSound.referenceSoundHandle = -1;
+
+	// DUDE: com_interpolate
+	renderInterpOriginPrev2.Zero();
+	renderInterpOriginPrev.Zero();
+	renderInterpOriginCur.Zero();
+	renderInterpAxisPrev.Identity();
+	renderInterpAxisCur.Identity();
+	renderInterpHistCount = 0;
+	renderInterpSnapshotTime = -1;
+	renderInterpApplied = false;
+}
+
+/*
+================
+rvClientEntity::SnapshotRenderTransform
+
+DUDE: com_interpolate: called when the render def is committed with ent's transform in a tic; ages the
+previous/current tic snapshots once per tic (see idEntity::SnapshotRenderTransform).
+================
+*/
+void rvClientEntity::SnapshotRenderTransform( const renderEntity_t &ent ) {
+	if ( renderInterpSnapshotTime != gameLocal.time ) {
+		if ( renderInterpSnapshotTime < 0 || renderInterpSnapshotTime != gameLocal.previousTime ) {
+			// first commit, or the def wasn't committed last tic: nothing to blend from
+			renderInterpOriginPrev2 = ent.origin;
+			renderInterpOriginPrev = ent.origin;
+			renderInterpAxisPrev = ent.axis;
+			renderInterpHistCount = 1;
+		} else {
+			renderInterpOriginPrev2 = renderInterpOriginPrev;
+			renderInterpOriginPrev = renderInterpOriginCur;
+			renderInterpAxisPrev = renderInterpAxisCur;
+			if ( renderInterpHistCount < 2 ) {
+				renderInterpHistCount++;
+			}
+		}
+		renderInterpSnapshotTime = gameLocal.time;
+	}
+	renderInterpOriginCur = ent.origin;
+	renderInterpAxisCur = ent.axis;
+	renderInterpApplied = false;	// the def now holds the tic transform
+
+	// don't glide across a teleport-sized jump
+	if ( ( renderInterpOriginCur - renderInterpOriginPrev ).LengthSqr() > Square( RENDER_INTERP_TELEPORT_DIST ) ) {
+		renderInterpOriginPrev2 = renderInterpOriginCur;
+		renderInterpOriginPrev = renderInterpOriginCur;
+		renderInterpAxisPrev = renderInterpAxisCur;
+		renderInterpHistCount = 1;
+	}
+}
+
+/*
+================
+rvClientEntity::PresentInterpolatedDef
+
+DUDE: com_interpolate: re-presents the render def at the sub-tic blend of its last two tic transforms
+(from a copy: ent keeps the exact tic state).
+================
+*/
+void rvClientEntity::PresentInterpolatedDef( int defHandle, const renderEntity_t &ent, float frac ) {
+	if ( defHandle == -1 || renderInterpSnapshotTime != gameLocal.time ) {
+		return;
+	}
+	if ( renderInterpOriginCur.Compare( renderInterpOriginPrev ) && renderInterpAxisCur.Compare( renderInterpAxisPrev ) ) {
+		return;
+	}
+	renderEntity_t lerped = ent;
+	RenderInterpBlendTransform( renderInterpOriginPrev2, renderInterpOriginPrev, renderInterpOriginCur,
+		renderInterpAxisPrev, renderInterpAxisCur, renderInterpHistCount, frac, lerped.origin, lerped.axis );
+	gameRenderWorld->UpdateEntityDef( defHandle, &lerped );
+	renderInterpApplied = true;
+}
+
+/*
+================
+rvClientEntity::RestoreRenderTransformDef
+================
+*/
+void rvClientEntity::RestoreRenderTransformDef( int defHandle, const renderEntity_t &ent ) {
+	if ( renderInterpApplied && defHandle != -1 ) {
+		gameRenderWorld->UpdateEntityDef( defHandle, &ent );
+	}
+	renderInterpApplied = false;
 }
 
 /*

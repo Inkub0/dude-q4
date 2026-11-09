@@ -107,6 +107,16 @@ public:
 	idList<signal_t> signal[ NUM_SIGNALS ];
 };
 
+// DUDE: com_interpolate (render interpolation above 60 fps): suppress render interpolation across
+// per-tic jumps larger than this (teleports, respawns). Legitimate mover/projectile motion stays
+// well below this per 60 Hz tic.
+const float RENDER_INTERP_TELEPORT_DIST = 64.0f;
+
+// DUDE: com_interpolate: the render transform frac of the way from the previous tic to the current
+// one (cubic with com_interpolateCubic and two tics of history, else linear); see Entity.cpp
+void RenderInterpBlendTransform( const idVec3 &orgPrev2, const idVec3 &orgPrev, const idVec3 &orgCur,
+		const idMat3 &axisPrev, const idMat3 &axisCur, int histCount, float frac, idVec3 &origin, idMat3 &axis );
+
 class idEntity : public idClass {
 public:
 	static const int		MAX_PVS_AREAS = 4;
@@ -120,6 +130,8 @@ public:
 	idLinkList<idEntity>	snapshotNode;			// for being linked into snapshotEntities list
 	int						snapshotSequence;		// last snapshot this entity was in
 	int						snapshotBits;			// number of bits this entity occupied in the last snapshot
+
+	int						renderInterpListedFrame;	// DUDE: managed by idGameLocal::RegisterRenderInterpolation (com_interpolate)
 
 	idStr					name;					// name of entity
 	idDict					spawnArgs;				// key/value pairs used to spawn and initialize entity
@@ -227,6 +239,8 @@ public:
 
 	// visuals
 	virtual void			Present( void );
+	virtual void			PresentInterpolated( float frac );		// DUDE: com_interpolate, see SnapshotRenderTransform()
+	virtual void			RestoreRenderTransform( void );			// DUDE: re-commit the authoritative tic transform after interpolation
 	// instance visuals
 	virtual void			InstanceJoin( void );
 	virtual void			InstanceLeave( void );
@@ -525,6 +539,22 @@ public:
 protected:
 	renderEntity_t			renderEntity;						// used to present a model to the renderer
 	int						modelDefHandle;						// handle to static renderer model
+
+	// DUDE: render interpolation (com_interpolate): the renderEntity transform as committed to the
+	// render world at the previous and current game tic. Between tics,
+	// idGameLocal::InterpolateRenderEntities re-presents entities that moved at a blend of the two, so
+	// world entities (movers, doors, monsters, projectiles, vehicles) glide instead of stepping at the
+	// fixed 60 Hz sim rate when rendering faster. Maintained by SnapshotRenderTransform(); purely
+	// visual state, never saved.
+	idVec3					renderInterpOriginPrev;
+	idVec3					renderInterpOriginCur;
+	idMat3					renderInterpAxisPrev;
+	idMat3					renderInterpAxisCur;
+	idVec3					renderInterpOriginPrev2;	// tic before Prev; the extra sample cubic interpolation needs
+	idMat3					renderInterpAxisPrev2;
+	int						renderInterpHistCount;		// consecutive committed tics of history (capped at 2); < 2 falls back to linear
+	int						renderInterpSnapshotTime;	// gameLocal.time renderInterp*Cur belongs to, -1 = no snapshot yet
+	void					SnapshotRenderTransform( void );
 	refSound_t				refSound;							// used to present sound to the audio engine
 	idEntityPtr< idEntity >	forwardDamageEnt;					// damage applied to the invoking object will be forwarded to this entity
 	idEntityPtr< idEntity > bindMaster;							// entity bound to if unequal NULL

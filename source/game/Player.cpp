@@ -1144,6 +1144,44 @@ idPlayer::idPlayer() {
 	firstPersonViewOrigin	= vec3_zero;
 	firstPersonViewAxis		= mat3_identity;
 
+	// DUDE: com_interpolate render caches
+	firstPersonViewOriginPrev	= vec3_zero;
+	firstPersonViewAxisPrev		= mat3_identity;
+	firstPersonViewTime			= -1;
+	effectViewAngles.Zero();
+	effectViewAnglesPrev.Zero();
+	gravityViewAxis.Identity();
+	gravityViewAxisPrev.Identity();
+	effectViewSeparable			= false;
+	renderViewInterpolatable	= false;
+	renderViewCameraOrigin		= vec3_zero;
+	renderViewCameraOriginPrev	= vec3_zero;
+	renderViewCameraAxis.Identity();
+	renderViewCameraAxisPrev.Identity();
+	renderViewCameraFovX		= 0.0f;
+	renderViewCameraFovXPrev	= 0.0f;
+	renderViewCameraFovY		= 0.0f;
+	renderViewCameraFovYPrev	= 0.0f;
+	renderViewCameraInterpolatable	= false;
+	renderViewHadCamera			= false;
+	renderViewCameraEntity		= NULL;
+	renderViewCameraCutSerial	= 0;
+	renderViewCameraTime		= -1;
+	renderViewOffsetViewAngles.Zero();
+	renderViewOffsetViewAnglesPrev.Zero();
+	renderViewOffsetAngle		= 0.0f;
+	renderViewOffsetHeight		= 0.0f;
+	renderViewOffsetClip		= false;
+	renderViewOffsetRange		= 0.0f;
+	renderViewOffsetRangePrev	= 0.0f;
+	renderViewOffsetFovX		= 0.0f;
+	renderViewOffsetFovXPrev	= 0.0f;
+	renderViewOffsetFovY		= 0.0f;
+	renderViewOffsetFovYPrev	= 0.0f;
+	renderViewOffsetInterpolatable	= false;
+	renderViewHadOffset			= false;
+	renderViewOffsetTime		= -1;
+
 	hipJoint				= INVALID_JOINT;
 	chestJoint				= INVALID_JOINT;
  	headJoint				= INVALID_JOINT;
@@ -10761,10 +10799,16 @@ void idPlayer::OffsetThirdPersonVehicleView( bool clip ) {
 
 /*
 ===============
-idPlayer::OffsetThirdPersonView
+idPlayer::ComputeThirdPersonView
+
+DUDE: builds the third-person orbit view into renderView from explicit inputs (eye origin, view angles,
+gravity axis) instead of reading tic state, so the per-tic OffsetThirdPersonView and the per-frame
+com_interpolate re-derivation (InterpolateRenderView) share one code path. The wall clip trace is re-run
+against the current collision world, which lets the interpolated camera re-fit to ridden movers each
+frame. Body is Raven's OffsetThirdPersonView.
 ===============
 */
-void idPlayer::OffsetThirdPersonView( float angle, float range, float height, bool clip ) {
+void idPlayer::ComputeThirdPersonView( const idVec3 &eyeOrigin, const idAngles &viewAng, const idMat3 &gravityAxis, float angle, float range, float height, bool clip ) {
 	idVec3			view;
 	idVec3			focusAngles;
 	trace_t			trace;
@@ -10773,11 +10817,10 @@ void idPlayer::OffsetThirdPersonView( float angle, float range, float height, bo
 	float			forwardScale, sideScale;
 	idVec3			origin;
 	idAngles		angles;
-	idMat3			axis;
 	idBounds		bounds;
 
-	angles = viewAngles;
-	GetViewPos( origin, axis );
+	angles = viewAng;
+	origin = eyeOrigin;
 
 	if ( angle ) {
 		angles.pitch = 0.0f;
@@ -10792,11 +10835,11 @@ void idPlayer::OffsetThirdPersonView( float angle, float range, float height, bo
 	view = origin;
 // RAVEN BEGIN
 // abahr: taking into account gravity
-	view += physicsObj.GetGravityAxis()[2] * (8.0f + height);
+	view += gravityAxis[2] * (8.0f + height);
 // RAVEN END
 
 	angles.pitch *= 0.5f;
-	renderView->viewaxis = angles.ToMat3() * physicsObj.GetGravityAxis();
+	renderView->viewaxis = angles.ToMat3() * gravityAxis;
 
 	idMath::SinCos( DEG2RAD( angle ), sideScale, forwardScale );
 	view -= range * forwardScale * renderView->viewaxis[ 0 ];
@@ -10814,7 +10857,7 @@ void idPlayer::OffsetThirdPersonView( float angle, float range, float height, bo
  			view = trace.endpos;
 // RAVEN BEGIN
 // abahr: taking into account gravity
- 			view += physicsObj.GetGravityAxis()[2] * ( 1.0f - trace.fraction ) * 32.0f;
+ 			view += gravityAxis[2] * ( 1.0f - trace.fraction ) * 32.0f;
 // RAVEN END
    
  			// try another trace to this position, because a tunnel may have the ceiling
@@ -10839,8 +10882,21 @@ void idPlayer::OffsetThirdPersonView( float angle, float range, float height, bo
 	angles.yaw -= angle;
 
 	renderView->vieworg = view;
-	renderView->viewaxis = angles.ToMat3() * physicsObj.GetGravityAxis();
+	renderView->viewaxis = angles.ToMat3() * gravityAxis;
 	renderView->viewID = 0;
+}
+
+/*
+===============
+idPlayer::OffsetThirdPersonView
+===============
+*/
+void idPlayer::OffsetThirdPersonView( float angle, float range, float height, bool clip ) {
+	idVec3			origin;
+	idMat3			axis;
+
+	GetViewPos( origin, axis );
+	ComputeThirdPersonView( origin, viewAngles, physicsObj.GetGravityAxis(), angle, range, height, clip );
 }
 
 /*
@@ -10866,7 +10922,25 @@ idPlayer::GetViewPos
 ===============
 */
 void idPlayer::GetViewPos( idVec3 &origin, idMat3 &axis ) const {
+	idAngles effectAngles;
+
+	GetViewPosEffects( origin, axis, effectAngles );
+}
+
+/*
+===============
+idPlayer::GetViewPosEffects
+
+DUDE: GetViewPos's body. On foot and alive the view axis is the additive Euler sum
+( viewAngles + effects ).ToMat3() * gravity, and effectAngles returns the effects part (bob, screen
+shake, kick) so com_interpolateAim can interpolate it apart from the real-time mouse look. Returns
+false (effectAngles zero) for the other views.
+===============
+*/
+bool idPlayer::GetViewPosEffects( idVec3 &origin, idMat3 &axis, idAngles &effectAngles ) const {
 	idAngles angles;
+
+	effectAngles.Zero();
 
 	// if dead, fix the angle and don't add any kick
 	if ( health <= 0 ) {
@@ -10875,6 +10949,7 @@ void idPlayer::GetViewPos( idVec3 &origin, idMat3 &axis ) const {
 		angles.pitch = -15;
 		axis = angles.ToMat3();
 		origin = GetEyePosition();
+		return false;
 	} else if ( IsInVehicle ( ) ) {	
 		vehicleController.GetEyePosition ( origin, axis );
 
@@ -10885,6 +10960,7 @@ void idPlayer::GetViewPos( idVec3 &origin, idMat3 &axis ) const {
 
   		origin += shakeOffset;
   		axis = (shakeAngleOffset + playerView.AngleOffset()).ToMat3() * axis;
+		return false;
 	} else {
   		idVec3		shakeOffset;
   		idAngles	shakeAngleOffset;
@@ -10893,6 +10969,7 @@ void idPlayer::GetViewPos( idVec3 &origin, idMat3 &axis ) const {
   		playerView.ShakeOffsets( shakeOffset, shakeAngleOffset, relBounds );
   		origin = GetEyePosition() + viewBob + shakeOffset;  		
 		angles = viewAngles + viewBobAngles + shakeAngleOffset + playerView.AngleOffset();
+		effectAngles = viewBobAngles + shakeAngleOffset + playerView.AngleOffset();	// DUDE
 
 		axis = angles.ToMat3() * physicsObj.GetGravityAxis();
 
@@ -10900,6 +10977,7 @@ void idPlayer::GetViewPos( idVec3 &origin, idMat3 &axis ) const {
 		origin += physicsObj.GetGravityNormal() * g_viewNodalZ.GetFloat();
 		origin += axis[0] * g_viewNodalX.GetFloat() + axis[2] * g_viewNodalZ.GetFloat();
 	}
+	return true;
 }
 
 /*
@@ -10908,6 +10986,21 @@ idPlayer::CalculateFirstPersonView
 ===============
 */
 void idPlayer::CalculateFirstPersonView( void ) {
+	// DUDE: com_interpolate: remember the previous tic's view so the renderer can interpolate between
+	// tics. In a vehicle this runs twice in a tic (before and after the physics); the history ages on
+	// the first call only, the second just refreshes this tic's view.
+	const bool firstOfTic = ( firstPersonViewTime != gameLocal.time );
+	const bool hadHistory = ( firstPersonViewTime >= 0 );
+	if ( firstOfTic ) {
+		firstPersonViewOriginPrev = firstPersonViewOrigin;
+		firstPersonViewAxisPrev = firstPersonViewAxis;
+		effectViewAnglesPrev = effectViewAngles;
+		gravityViewAxisPrev = gravityViewAxis;
+		firstPersonViewTime = gameLocal.time;
+	}
+	const bool wasSeparable = effectViewSeparable;
+	effectViewSeparable = false;
+
 	if ( ( pm_modelView.GetInteger() == 1 ) || ( ( pm_modelView.GetInteger() == 2 ) && ( health <= 0 ) ) ) {
 		//	Displays the view from the point of view of the "camera" joint in the player model
 
@@ -10924,7 +11017,34 @@ void idPlayer::CalculateFirstPersonView( void ) {
 		firstPersonViewAxis = axis * ang.ToMat3() * physicsObj.GetGravityAxis();
 	} else {
 		// offset for local bobbing and kicks
-		GetViewPos( firstPersonViewOrigin, firstPersonViewAxis );
+		effectViewSeparable = GetViewPosEffects( firstPersonViewOrigin, firstPersonViewAxis, effectViewAngles );	// DUDE: GetViewPos
+	}
+
+	// DUDE: com_interpolate: this tic's view-effect sum (zero when the view isn't the additive sum) and
+	// gravity axis, for com_interpolateAim
+	if ( !effectViewSeparable ) {
+		effectViewAngles.Zero();
+	}
+	gravityViewAxis = physicsObj.GetGravityAxis();
+
+	// If the view jumped much further than normal per-tic motion (teleport, respawn, level load, camera
+	// cut), snap the previous view to the current one so we don't interpolate across the discontinuity
+	// and smear the view for a frame. The angle test also catches orientation-only jumps (scripted
+	// SetViewAngles); normal mouselook, even fast flicks, stays under it. A gravity flip about the view
+	// axis can pass the angle test, so it snaps too, and so does a change of view kind (getting into
+	// or out of a vehicle, dying) for the effect sum.
+	const float interpMaxDeltaSqr = Square( 64.0f );
+	const float interpMinForwardDot = 0.7f;	// ~45 degrees of view turn in a single tic
+	if ( !hadHistory
+			|| ( firstPersonViewOrigin - firstPersonViewOriginPrev ).LengthSqr() > interpMaxDeltaSqr
+			|| ( firstPersonViewAxis[0] * firstPersonViewAxisPrev[0] ) < interpMinForwardDot
+			|| ( gravityViewAxisPrev != gravityViewAxis ) ) {
+		firstPersonViewOriginPrev = firstPersonViewOrigin;
+		firstPersonViewAxisPrev = firstPersonViewAxis;
+		effectViewAnglesPrev = effectViewAngles;
+		gravityViewAxisPrev = gravityViewAxis;
+	} else if ( firstOfTic && !wasSeparable ) {
+		effectViewAnglesPrev = effectViewAngles;
 	}
 }
 
@@ -11002,6 +11122,7 @@ create the renderView for the current tic
 void idPlayer::CalculateRenderView( void ) {
 	int i;
 	float range;
+	float offsetRange = 0.0f;	// DUDE: com_interpolate: the range passed to OffsetThirdPersonView this tic (the death cam ramps it)
 
 	if ( !renderView ) {
 // RAVEN BEGIN
@@ -11026,16 +11147,67 @@ void idPlayer::CalculateRenderView( void ) {
 	renderView->height = SCREEN_HEIGHT;
 	renderView->viewID = 0;
 
+	// DUDE: com_interpolate: which kind of view this tic's is decides how InterpolateRenderView moves it
+	// between tics: a plain first-person view, a camera view, or a third-person / death view. The
+	// others (third person in a vehicle, a model-joint view) render stepped.
+	renderViewInterpolatable = false;
+	renderViewCameraInterpolatable = false;
+	renderViewOffsetInterpolatable = false;
+
 	// check if we should be drawing from a camera's POV
 	if ( !noclip && (gameLocal.GetCamera() || privateCameraView) ) {
+		idCamera *activeCamera = privateCameraView ? privateCameraView : gameLocal.GetCamera();
 		// get origin, axis, and fov
 		if ( privateCameraView ) {
 			privateCameraView->GetViewParms( renderView );
 		} else {
 			gameLocal.GetCamera()->GetViewParms( renderView );
 		}
+
+		// DUDE: com_interpolate: the camera is committed once per 60Hz tic like any mover; with the
+		// actors gliding sub-tic a stepped camera makes them judder during pans. Snapshot the view the
+		// camera just produced so InterpolateRenderView glides it by the same frac. The history ages
+		// once per tic while the shot is CONTINUOUS (same camera, no hard cut inside it, the pose moved
+		// less than a teleport-sized step); otherwise it snaps so the discontinuity renders exactly. A
+		// camera can Stop()-chain to a different one from inside GetViewParms, so the switch is checked
+		// after it. fov is the FINAL aspect-corrected value (GetViewParms ran CalcFov) and is lerped
+		// directly - re-running CalcFov would double-widen.
+		const bool cameraSwitched = !privateCameraView && ( gameLocal.GetCamera() != activeCamera );
+		const int camCutSerial = activeCamera->GetViewCutSerial();
+		const bool camContinuous = renderViewHadCamera
+			&& !cameraSwitched
+			&& renderViewCameraEntity == activeCamera
+			&& renderViewCameraCutSerial == camCutSerial
+			&& ( renderView->vieworg - renderViewCameraOrigin ).LengthSqr() <= Square( 64.0f )
+			&& ( renderView->viewaxis[0] * renderViewCameraAxis[0] ) >= 0.7f;
+		if ( !camContinuous ) {
+			renderViewCameraOriginPrev	= renderView->vieworg;
+			renderViewCameraAxisPrev	= renderView->viewaxis;
+			renderViewCameraFovXPrev	= renderView->fov_x;
+			renderViewCameraFovYPrev	= renderView->fov_y;
+		} else if ( renderViewCameraTime != gameLocal.time ) {
+			renderViewCameraOriginPrev	= renderViewCameraOrigin;
+			renderViewCameraAxisPrev	= renderViewCameraAxis;
+			renderViewCameraFovXPrev	= renderViewCameraFovX;
+			renderViewCameraFovYPrev	= renderViewCameraFovY;
+		}
+		renderViewCameraOrigin	= renderView->vieworg;
+		renderViewCameraAxis	= renderView->viewaxis;
+		renderViewCameraFovX	= renderView->fov_x;
+		renderViewCameraFovY	= renderView->fov_y;
+		renderViewCameraEntity	= activeCamera;
+		renderViewCameraCutSerial = camCutSerial;
+		renderViewCameraTime	= gameLocal.time;
+		renderViewCameraInterpolatable = true;
+		renderViewHadCamera = true;
+		renderViewHadOffset = false;	// a camera tic is not an offset view; the next third-person entry snaps
 	} else {
 		bool cameraIsSet = false;
+
+		renderViewHadCamera = false;	// DUDE: leaving the camera path: the next entry snaps
+		renderViewCameraEntity = NULL;
+		const bool hadOffset = renderViewHadOffset;
+		renderViewHadOffset = false;	// set again below for the third-person / death branches
 
 		// First try out any camera views that can possibly fail.
 		if( !cameraIsSet ){
@@ -11043,6 +11215,7 @@ void idPlayer::CalculateRenderView( void ) {
 	 			renderView->vieworg = firstPersonViewOrigin;
 	 			renderView->viewaxis = firstPersonViewAxis;
 				SmoothenRenderView( true );
+				renderViewInterpolatable = true;	// DUDE
  
 	 			if ( !pm_thirdPerson.GetBool() ) {
 	 				// set the viewID to the clientNum + 1, so we can suppress the right player bodies and
@@ -11056,16 +11229,28 @@ void idPlayer::CalculateRenderView( void ) {
 // RAVEN END
 				SmoothenRenderView( false );
 			} else if ( pm_thirdPerson.GetBool() ) {
-				OffsetThirdPersonView( pm_thirdPersonAngle.GetFloat(), pm_thirdPersonRange.GetFloat(), pm_thirdPersonHeight.GetFloat(), pm_thirdPersonClip.GetBool() );
+				// DUDE: cache the OffsetThirdPersonView params so InterpolateRenderView can re-derive the orbit
+				renderViewOffsetAngle = pm_thirdPersonAngle.GetFloat();
+				renderViewOffsetHeight = pm_thirdPersonHeight.GetFloat();
+				renderViewOffsetClip = pm_thirdPersonClip.GetBool();
+				offsetRange = pm_thirdPersonRange.GetFloat();
+				OffsetThirdPersonView( renderViewOffsetAngle, offsetRange, renderViewOffsetHeight, renderViewOffsetClip );
 				SmoothenRenderView( false );
+				renderViewOffsetInterpolatable = true;
 			} else if ( pm_thirdPersonDeath.GetBool() ) {
 				range = gameLocal.time < minRespawnTime ? ( gameLocal.time + RAGDOLL_DEATH_TIME - minRespawnTime ) * ( 120.0f / RAGDOLL_DEATH_TIME ) : 120.0f;
-	 			OffsetThirdPersonView( 0.0f, 20.0f + range, 0.0f, false );
+				renderViewOffsetAngle = 0.0f;	// DUDE: see above
+				renderViewOffsetHeight = 0.0f;
+				renderViewOffsetClip = false;
+				offsetRange = 20.0f + range;
+	 			OffsetThirdPersonView( 0.0f, offsetRange, 0.0f, false );
 				SmoothenRenderView( false );
+				renderViewOffsetInterpolatable = true;
 			} else {
 				renderView->vieworg = firstPersonViewOrigin;
 				renderView->viewaxis = firstPersonViewAxis;
 				SmoothenRenderView( true );
+				renderViewInterpolatable = true;	// DUDE
 				// set the viewID to the clientNum + 1, so we can suppress the right player bodies and
 				// allow the right player view weapons
 				renderView->viewID = entityNumber + 1;
@@ -11075,6 +11260,36 @@ void idPlayer::CalculateRenderView( void ) {
 		// field of view
  		gameLocal.CalcFov( CalcFov( true ), renderView->fov_x, renderView->fov_y );
 
+		// DUDE: com_interpolate: the third-person and death-cam views also commit once per 60Hz tic.
+		// Instead of lerping the final post-trace pose (which kinks and lags, and never re-fits the wall
+		// trace to a ridden mover), cache this tic's INPUTS so InterpolateRenderView re-derives the orbit
+		// each rendered frame from the interpolated eye and real-time view angles. The eye's own
+		// discontinuities are handled by firstPersonViewOrigin's teleport guard; here only the orbit
+		// angles and range snap across the entry or a scripted view-angle jump. Not for the pm_modelView
+		// POV: there firstPersonViewOrigin is the model camera joint, not the GetViewPos pivot.
+		if ( renderViewOffsetInterpolatable && pm_modelView.GetInteger() == 0 ) {
+			const bool offsetContinuous = hadOffset
+				&& ( viewAngles.ToForward() * renderViewOffsetViewAngles.ToForward() ) >= 0.7f;
+			if ( !offsetContinuous ) {
+				renderViewOffsetViewAnglesPrev	= viewAngles;
+				renderViewOffsetRangePrev		= offsetRange;
+				renderViewOffsetFovXPrev		= renderView->fov_x;
+				renderViewOffsetFovYPrev		= renderView->fov_y;
+			} else if ( renderViewOffsetTime != gameLocal.time ) {
+				renderViewOffsetViewAnglesPrev	= renderViewOffsetViewAngles;
+				renderViewOffsetRangePrev		= renderViewOffsetRange;
+				renderViewOffsetFovXPrev		= renderViewOffsetFovX;
+				renderViewOffsetFovYPrev		= renderViewOffsetFovY;
+			}
+			renderViewOffsetViewAngles	= viewAngles;
+			renderViewOffsetRange		= offsetRange;
+			renderViewOffsetFovX		= renderView->fov_x;
+			renderViewOffsetFovY		= renderView->fov_y;
+			renderViewOffsetTime		= gameLocal.time;
+			renderViewHadOffset = true;
+		} else {
+			renderViewOffsetInterpolatable = false;
+		}
 	}
 
 	if ( renderView->fov_y == 0 ) {
@@ -11083,6 +11298,160 @@ void idPlayer::CalculateRenderView( void ) {
 
 	if ( g_showviewpos.GetBool() ) {
 		gameLocal.Printf( "%s : %s\n", renderView->vieworg.ToString(), renderView->viewaxis.ToAngles().ToString() );
+	}
+}
+
+/*
+==================
+idPlayer::InterpolateRenderView
+
+DUDE: com_interpolate. Called once per *rendered* frame (which may be more often than the game tics).
+Nudges the cached view toward the sub-tic time so motion looks smooth above 60 fps while the
+simulation keeps stepping at the fixed tic rate. frac is the interpolation alpha in [0,1] between the
+previous and current tic (see common->GetTicInterpolation()).
+
+This interpolates between two already-simulated states, so it renders up to one tic (~16.7ms) in the
+past and never extrapolates. The mouse look is the exception (com_interpolateAim): it is advanced to
+real time. Shooting resolves from the usercmd at the game tic, so no shot latency is added.
+==================
+*/
+void idPlayer::InterpolateRenderView( float frac ) {
+	if ( !renderView ) {
+		return;
+	}
+
+	// Cinematic / camera view: glide the camera between its previous and current tic so it stays in
+	// step with the interpolated actors. prev == cur across a cut, so this is an exact no-op there.
+	if ( renderViewCameraInterpolatable ) {
+		if ( renderViewCameraTime != gameLocal.time ) {
+			return;
+		}
+		renderView->vieworg = renderViewCameraOriginPrev + frac * ( renderViewCameraOrigin - renderViewCameraOriginPrev );
+		idQuat cq;
+		cq.Slerp( renderViewCameraAxisPrev.ToQuat(), renderViewCameraAxis.ToQuat(), frac );
+		renderView->viewaxis = cq.ToMat3();
+		// lerp the FINAL (already aspect-corrected) fov components directly
+		renderView->fov_x = renderViewCameraFovXPrev + frac * ( renderViewCameraFovX - renderViewCameraFovXPrev );
+		renderView->fov_y = renderViewCameraFovYPrev + frac * ( renderViewCameraFovY - renderViewCameraFovYPrev );
+		return;
+	}
+
+	// a view of this tic's that CalculateFirstPersonView didn't run for (no history to blend) stays as is
+	if ( firstPersonViewTime != gameLocal.time ) {
+		return;
+	}
+
+	// The real-time mouse overlay (com_interpolateAim) is valid ONLY when this tic will apply exactly the
+	// previewed free-look delta. UpdateViewAngles FREEZES viewAngles (INFLUENCE_LEVEL2), RATE-LIMITS them
+	// (INFLUENCE_LEVEL3, +/-1 deg/tic) or OVERRIDES the pitch (centerView); the objectives screen may take
+	// the mouse. In those the overlay would drift against the sim and snap each tic, so defer to the
+	// plain blend. Keep this mirrored with idPlayer::UpdateViewAngles.
+	const bool viewAnglesFree = ( !objectiveSystemOpen
+		&& influenceActive != INFLUENCE_LEVEL2 && influenceActive != INFLUENCE_LEVEL3
+		&& centerView.IsDone( gameLocal.time ) );
+	const bool aimAllowed = ( frac < 1.0f && health > 0 && !spectating && !IsInVehicle() && viewAnglesFree
+		&& cvarSystem->GetCVarBool( "com_interpolateAim" ) );
+
+	// Third-person / death-cam view: RE-DERIVE the orbit each rendered frame from the interpolated eye
+	// and real-time view angles, re-tracing the walls, so it matches first-person smoothness and re-fits
+	// to ridden movers. The eye reuses firstPersonViewOrigin (GetViewPos was the source of both it and
+	// the third-person pivot), which already carries the teleport snap.
+	if ( renderViewOffsetInterpolatable ) {
+		if ( renderViewOffsetTime != gameLocal.time ) {
+			return;
+		}
+		const idVec3 eye = firstPersonViewOriginPrev + frac * ( firstPersonViewOrigin - firstPersonViewOriginPrev );
+
+		// orbit angles: real time when the tic will apply the previewed free-look delta, else a
+		// shortest-path lerp of the two tics' angles. At frac == 1 both are this tic's viewAngles.
+		idAngles ang;
+		if ( aimAllowed ) {
+			float dyaw = 0.0f, dpitch = 0.0f;
+			common->GetPendingViewAngleDelta( dyaw, dpitch );
+			ang = viewAngles;
+			ang.yaw += dyaw;
+			if ( noclip ) {
+				ang.pitch = idMath::ClampFloat( -89.0f, 89.0f, viewAngles.pitch + dpitch );
+			} else {
+				ang.pitch = idMath::ClampFloat( pm_minviewpitch.GetFloat(), pm_maxviewpitch.GetFloat(), viewAngles.pitch + dpitch );
+			}
+		} else {
+			idAngles d = renderViewOffsetViewAngles - renderViewOffsetViewAnglesPrev;
+			d.Normalize180();
+			ang = renderViewOffsetViewAnglesPrev + d * frac;
+		}
+
+		const float rng = renderViewOffsetRangePrev + frac * ( renderViewOffsetRange - renderViewOffsetRangePrev );
+		ComputeThirdPersonView( eye, ang, physicsObj.GetGravityAxis(), renderViewOffsetAngle, rng, renderViewOffsetHeight, renderViewOffsetClip );
+
+		renderView->fov_x = renderViewOffsetFovXPrev + frac * ( renderViewOffsetFovX - renderViewOffsetFovXPrev );
+		renderView->fov_y = renderViewOffsetFovYPrev + frac * ( renderViewOffsetFovY - renderViewOffsetFovYPrev );
+		return;
+	}
+
+	if ( !renderViewInterpolatable ) {
+		return;
+	}
+
+	// recompute from the stable prev/current values each rendered frame so repeated calls within the
+	// same tic stay consistent (idempotent) instead of drifting
+	renderView->vieworg = firstPersonViewOriginPrev + frac * ( firstPersonViewOrigin - firstPersonViewOriginPrev );
+
+	if ( !aimAllowed || !effectViewSeparable || pm_modelView.GetInteger() != 0 ) {
+		// slerp the whole view axis (mouse look + bob/shake/kick) between the last two tics. At
+		// frac == 1 this is firstPersonViewAxis, so the last render of a tic equals the tic state.
+		idQuat q;
+		q.Slerp( firstPersonViewAxisPrev.ToQuat(), firstPersonViewAxis.ToQuat(), frac );
+		renderView->viewaxis = q.ToMat3();
+		return;
+	}
+
+	// Low-latency aim, component-separated. GetViewPos builds the on-foot axis as an ADDITIVE Euler sum,
+	//   ( viewAngles + viewBobAngles + shake + AngleOffset() ).ToMat3() * gravityAxis
+	// so the mouse look (viewAngles) is advanced to real time while the effect sum and the gravity axis
+	// lerp smoothly by frac: zero-latency aim AND no 60Hz stepping of bob, shake or kick.
+	float dyaw = 0.0f, dpitch = 0.0f;
+	common->GetPendingViewAngleDelta( dyaw, dpitch );
+
+	const idAngles effect = effectViewAnglesPrev + frac * ( effectViewAngles - effectViewAnglesPrev );
+
+	// the newest tic's clamped mouse angle plus the pending, not yet simulated delta, the pitch clamped
+	// on the MOUSE component only - exactly as UpdateViewAngles does before the effects are added, so the
+	// next tic lands on the same angle
+	idAngles mouse = viewAngles;
+	mouse.yaw += dyaw;
+	if ( noclip ) {
+		mouse.pitch = idMath::ClampFloat( -89.0f, 89.0f, viewAngles.pitch + dpitch );
+	} else {
+		mouse.pitch = idMath::ClampFloat( pm_minviewpitch.GetFloat(), pm_maxviewpitch.GetFloat(), viewAngles.pitch + dpitch );
+	}
+
+	// gravity axis: slerp only when it changed this tic (constant in almost all gameplay)
+	idMat3 gravity;
+	if ( gravityViewAxisPrev == gravityViewAxis ) {
+		gravity = gravityViewAxis;
+	} else {
+		idQuat gq;
+		gq.Slerp( gravityViewAxisPrev.ToQuat(), gravityViewAxis.ToQuat(), frac );
+		gravity = gq.ToMat3();
+	}
+
+	// recompose exactly as GetViewPos
+	renderView->viewaxis = ( mouse + effect ).ToMat3() * gravity;
+}
+
+/*
+==================
+idPlayer::InterpolateViewWeapon
+
+DUDE: com_interpolate: forwards render interpolation to the view model so the gun tracks the
+interpolated view.
+==================
+*/
+void idPlayer::InterpolateViewWeapon( float frac ) {
+	rvViewWeapon *viewModel = weaponViewModel.GetEntity();
+	if ( viewModel ) {
+		viewModel->InterpolateViewWeapon( frac );
 	}
 }
 

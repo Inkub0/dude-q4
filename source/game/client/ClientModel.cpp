@@ -103,12 +103,30 @@ void rvClientModel::Present(void) {
 	renderEntity.origin = worldOrigin;
 	renderEntity.axis = worldAxis;
 
+	// DUDE: remember this tic's transform for sub-tic render interpolation (com_interpolate)
+	SnapshotRenderTransform( renderEntity );
+
 	// add to refresh list
 	if ( entityDefHandle == -1 ) {
 		entityDefHandle = gameRenderWorld->AddEntityDef( &renderEntity );
 	} else {
 		gameRenderWorld->UpdateEntityDef( entityDefHandle, &renderEntity );
 	}		
+}
+
+/*
+================
+rvClientModel::PresentInterpolated / RestoreRenderTransform
+
+DUDE: com_interpolate, see rvClientEntity::PresentInterpolatedDef.
+================
+*/
+void rvClientModel::PresentInterpolated( float frac ) {
+	PresentInterpolatedDef( entityDefHandle, renderEntity, frac );
+}
+
+void rvClientModel::RestoreRenderTransform( void ) {
+	RestoreRenderTransformDef( entityDefHandle, renderEntity );
 }
 
 /*
@@ -249,7 +267,13 @@ bool rvClientModel::UpdateRenderEntity( renderEntity_s *renderEntity, const rend
 
 	idAnimator *animator = GetAnimator();
 	if ( animator ) {
-		return animator->CreateFrame( gameLocal.time, false );
+		// DUDE: com_interpolateAnim: the pose blended to the instant the transform is interpolated
+		// to, as for entities (idEntity::UpdateRenderEntity)
+		if ( gameLocal.renderInterpAnim ) {
+			const bool restartHistory = ( renderInterpSnapshotTime == gameLocal.time && renderInterpHistCount < 2 );
+			return animator->CreateInterpolatedFrame( renderEntity, gameLocal.time, gameLocal.previousTime, gameLocal.renderInterpolateFrac, restartHistory );
+		}
+		return animator->CreateTicFrame( renderEntity, gameLocal.time );
 	}
 
 	return false;

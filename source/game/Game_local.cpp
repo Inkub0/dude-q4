@@ -294,6 +294,13 @@ void idGameLocal::Clear( void ) {
 	previousTime = 0;
 	time = 0;
 	vacuumAreaNum = 0;
+	// DUDE: com_interpolate
+	renderInterpEntities.Clear();
+	renderInterpFrameNum = -1;
+	renderInterpApplied = false;
+	renderInterpolateFrac = 1.0f;
+	renderInterpCubic = false;
+	renderInterpAnim = false;
 
 // RAVEN BEGIN
 // abahr
@@ -3565,6 +3572,14 @@ TIME_THIS_SCOPE("idGameLocal::RunFrame - gameDebug.BeginFrame()");
 		// do this before we process events, which may rely on PVS info
 		SetupPlayerPVS();
 
+		// DUDE: com_interpolate: between the previous tic and this one, the render defs of the entities
+		// that moved were re-presented at sub-tic blended transforms; re-commit the authoritative tic
+		// state before this tic runs so entities that stop moving (or stop presenting) don't linger
+		// mid-blend, then start a fresh list for this tic
+		RestoreRenderInterpolation();
+		renderInterpEntities.SetNum( 0, false );
+		renderInterpFrameNum = framenum;
+
 		// process events on the server
 		ServerProcessEntityNetworkEventQueue();
 
@@ -3905,6 +3920,11 @@ bool idGameLocal::Draw( int clientNum ) {
 //	DisplayClipProfile( );
 //	ClearClipProfile( );
 
+	// DUDE: not interpolating unless the block below says so; keep UpdateRenderEntity's anim path (and
+	// the MP path) on exact tic state
+	renderInterpolateFrac = 1.0f;
+	renderInterpAnim = false;
+
 	if ( isMultiplayer ) {
 		return mpGame.Draw( clientNum );
 	}
@@ -3913,6 +3933,25 @@ bool idGameLocal::Draw( int clientNum ) {
 
 	if ( !player ) {
 		return false;
+	}
+
+	// DUDE: com_interpolate (declared engine-side, it also decouples the render loop from the 60 Hz
+	// game tics): nudge the cached render view, the view model and the world entities that moved this
+	// tic toward the current sub-tic time, so motion is smooth when rendering faster than the tics.
+	// Not for demo playback (its own view smoothing) or g_stopTime (time stands still).
+	if ( cvarSystem->GetCVarBool( "com_interpolate" ) && GetDemoState() == DEMO_NONE && !g_stopTime.GetBool()
+			&& !( inCinematic && skipCinematic ) ) {
+		float frac = common->GetTicInterpolation();
+		// cache the refinement toggles once per rendered frame (read per entity below and in
+		// UpdateRenderEntity); all are no-ops at frac == 1.0
+		renderInterpolateFrac = frac;
+		renderInterpCubic = cvarSystem->GetCVarBool( "com_interpolateCubic" );
+		renderInterpAnim = cvarSystem->GetCVarBool( "com_interpolateAnim" );
+		player->InterpolateRenderView( frac );
+		player->InterpolateViewWeapon( frac );
+		// world entities that moved this tic (movers, doors, monsters, projectiles, vehicles, moving
+		// lights, client models) glide between their previous and current tic transforms
+		InterpolateRenderEntities( frac );
 	}
 
 // RAVEN BEGIN
@@ -3929,12 +3968,102 @@ bool idGameLocal::Draw( int clientNum ) {
 	// render the scene
 	player->playerView.RenderPlayerView( player->hud );
 
+	// DUDE: done rendering: anything that issues a render callback before the next rendered frame (the
+	// game tics, e.g. a trace against an animated model) gets the exact tic pose, not this frame's
+	// sub-tic one
+	renderInterpolateFrac = 1.0f;
+	renderInterpAnim = false;
+
 // RAVEN BEGIN
 // bdube: debugging HUD
 	gameDebug.DrawHud( );
 // RAVEN END
 
 	return true;
+}
+
+/*
+===================
+idGameLocal::RegisterRenderInterpolation
+
+DUDE: com_interpolate: called by idEntity::SnapshotRenderTransform (and the idLight light-def
+equivalent) when an entity commits its render transform in a new tic. The listed entities are
+re-presented at sub-tic blended transforms by InterpolateRenderEntities between tics.
+===================
+*/
+void idGameLocal::RegisterRenderInterpolation( idEntity *ent ) {
+	// interpolation is applied in the single-player Draw path only; network clients never run
+	// RunFrame's per-tic reset, so don't let their prediction frames grow the list
+	if ( isClient || isMultiplayer ) {
+		return;
+	}
+
+	// start a fresh list on the first commit of a new tic (keyed on framenum so the reset can't fire
+	// twice within one tic)
+	if ( renderInterpFrameNum != framenum ) {
+		renderInterpEntities.SetNum( 0, false );
+		renderInterpFrameNum = framenum;
+	}
+
+	// an entity can commit both a model and a light def in the same tic; list it once
+	if ( ent->renderInterpListedFrame == framenum ) {
+		return;
+	}
+	ent->renderInterpListedFrame = framenum;
+
+	idEntityPtr<idEntity> &entPtr = renderInterpEntities.Alloc();
+	entPtr = ent;
+}
+
+/*
+===================
+idGameLocal::InterpolateRenderEntities
+
+DUDE: com_interpolate: called once per rendered frame (between game tics, from Draw) to re-present
+the entities (and client entities) that moved during the current tic at transforms blended between
+the previous and current tic, so they glide instead of stepping at the fixed 60 Hz sim rate. frac is
+the interpolation alpha in [0,1], see common->GetTicInterpolation().
+===================
+*/
+void idGameLocal::InterpolateRenderEntities( float frac ) {
+	for ( int i = 0; i < renderInterpEntities.Num(); i++ ) {
+		idEntity *ent = renderInterpEntities[ i ].GetEntity();
+		if ( ent ) {
+			ent->PresentInterpolated( frac );
+		}
+	}
+
+	for ( rvClientEntity *cent = clientSpawnedEntities.Next(); cent != NULL; cent = cent->spawnNode.Next() ) {
+		cent->PresentInterpolated( frac );
+	}
+
+	// the render defs now hold sub-tic transforms; RunFrame re-commits the authoritative state at the
+	// start of the next tic
+	renderInterpApplied = true;
+}
+
+/*
+===================
+idGameLocal::RestoreRenderInterpolation
+
+DUDE: com_interpolate: re-commit the authoritative tic transforms of everything
+InterpolateRenderEntities re-presented, at the start of a tic.
+===================
+*/
+void idGameLocal::RestoreRenderInterpolation( void ) {
+	if ( !renderInterpApplied ) {
+		return;
+	}
+	for ( int i = 0; i < renderInterpEntities.Num(); i++ ) {
+		idEntity *ent = renderInterpEntities[ i ].GetEntity();
+		if ( ent ) {
+			ent->RestoreRenderTransform();
+		}
+	}
+	for ( rvClientEntity *cent = clientSpawnedEntities.Next(); cent != NULL; cent = cent->spawnNode.Next() ) {
+		cent->RestoreRenderTransform();
+	}
+	renderInterpApplied = false;
 }
 
 /*
