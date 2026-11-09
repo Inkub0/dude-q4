@@ -258,13 +258,19 @@ void rvClientEffect::PresentInterpolated( float frac ) {
 		if ( masterOrigin.Compare( renderInterpMasterOrigin ) && masterAxis.Compare( renderInterpMasterAxis ) ) {
 			return;		// the master is drawn at its tic transform
 		}
-		// the effect in the master's frame at the tic (world -> local: ( p - o ) * axis^T), onto the
-		// master as drawn (local -> world: o + p * axis)
-		const idMat3 masterAxisT = renderInterpMasterAxis.Transpose();
-		const idVec3 localOrigin = ( renderEffect.origin - renderInterpMasterOrigin ) * masterAxisT;
-		const idMat3 localAxis = renderEffect.axis * masterAxisT;
+		// the effect in the master's frame at the tic (world -> local: ( p - o ) * axis^-1), onto the
+		// master as drawn (local -> world: o + p * axis). A master's render axis need not be a rotation
+		// (the view model's is foreshortened): the point goes through the full axis, as the game places
+		// the joints it binds to, while the effect's own axis follows only the master's rotation, so it
+		// stays a rotation for the effect runtime
+		idMat3 masterAxisInverse = renderInterpMasterAxis;
+		if ( !masterAxisInverse.InverseSelf() ) {
+			return;
+		}
+		const idVec3 localOrigin = ( renderEffect.origin - renderInterpMasterOrigin ) * masterAxisInverse;
+		const idMat3 localAxis = renderEffect.axis * RenderInterpAxisRotation( renderInterpMasterAxis ).Transpose();
 		origin = masterOrigin + localOrigin * masterAxis;
-		axis = localAxis * masterAxis;
+		axis = localAxis * RenderInterpAxisRotation( masterAxis );
 	} else {
 		if ( renderInterpOriginCur.Compare( renderInterpOriginPrev ) && renderInterpAxisCur.Compare( renderInterpAxisPrev ) ) {
 			return;

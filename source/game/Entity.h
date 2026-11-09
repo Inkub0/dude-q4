@@ -112,6 +112,13 @@ public:
 // well below this per 60 Hz tic.
 const float RENDER_INTERP_TELEPORT_DIST = 64.0f;
 
+// DUDE: com_interpolate: an axis frac of the way from a to b. Render axes need not be rotations - the
+// view model's is foreshortened (rvWeapon::ForeshortenAxis), client moveables scale theirs - so each is
+// split into a rotation (slerped) and the shape left over (lerped), never forced through a quaternion
+idMat3 RenderInterpBlendAxis( const idMat3 &a, const idMat3 &b, float frac );
+// the rotation part of a render axis (its rows made orthonormal, a proper rotation)
+idMat3 RenderInterpAxisRotation( const idMat3 &m );
+
 // DUDE: com_interpolate: the render transform frac of the way from the previous tic to the current
 // one (cubic with com_interpolateCubic and two tics of history, else linear); see Entity.cpp
 void RenderInterpBlendTransform( const idVec3 &orgPrev2, const idVec3 &orgPrev, const idVec3 &orgCur,

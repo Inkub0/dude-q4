@@ -418,14 +418,8 @@ bool rvEyeRelativeInterp::Blend( float frac, const idVec3 &eyeOrigin, const idMa
 		return false;
 	}
 	const idVec3 localOrigin = originPrev + frac * ( originCur - originPrev );
-	idMat3 localAxis;
-	if ( axisPrev.Compare( axisCur ) ) {
-		localAxis = axisCur;
-	} else {
-		idQuat q;
-		q.Slerp( axisPrev.ToQuat(), axisCur.ToQuat(), frac );
-		localAxis = q.ToMat3();
-	}
+	// the view model's axis is foreshortened, not a rotation: blend its rotation and its shape apart
+	const idMat3 localAxis = RenderInterpBlendAxis( axisPrev, axisCur, frac );
 	// eye space -> world: o + p * axis
 	axis = localAxis * eyeAxis;
 	origin = eyeOrigin + localOrigin * eyeAxis;

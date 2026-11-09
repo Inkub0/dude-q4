@@ -1765,13 +1765,44 @@ void RenderInterpBlendTransform( const idVec3 &orgPrev2, const idVec3 &orgPrev, 
 		origin = orgPrev + frac * ( orgCur - orgPrev );
 	}
 
-	if ( axisPrev.Compare( axisCur ) ) {
-		axis = axisCur;
-	} else {
-		idQuat q;
-		q.Slerp( axisPrev.ToQuat(), axisCur.ToQuat(), frac );
-		axis = q.ToMat3();
+	axis = RenderInterpBlendAxis( axisPrev, axisCur, frac );
+}
+
+/*
+================
+RenderInterpAxisRotation / RenderInterpBlendAxis
+
+DUDE: com_interpolate. A render axis m is split as m = shape * rotation: the rotation is m's rows made
+orthonormal (Gram-Schmidt, the third row their cross product so it is always a proper rotation), the
+shape what is left (m * rotation^T): identity for a plain rotation, the row scales for a foreshortened
+or scaled one. Blending slerps the rotations and lerps the shapes, so a scaled axis keeps its scale
+between tics (a quaternion of it alone would drop it) and both ends come back exactly.
+================
+*/
+idMat3 RenderInterpAxisRotation( const idMat3 &m ) {
+	idVec3 x = m[0];
+	if ( x.Normalize() < 1e-6f ) {
+		return mat3_identity;
 	}
+	idVec3 y = m[1] - ( m[1] * x ) * x;
+	if ( y.Normalize() < 1e-6f ) {
+		return mat3_identity;
+	}
+	return idMat3( x, y, x.Cross( y ) );
+}
+
+idMat3 RenderInterpBlendAxis( const idMat3 &a, const idMat3 &b, float frac ) {
+	if ( a.Compare( b ) ) {
+		return b;
+	}
+	const idMat3 rotA = RenderInterpAxisRotation( a );
+	const idMat3 rotB = RenderInterpAxisRotation( b );
+	const idMat3 shapeA = a * rotA.Transpose();
+	const idMat3 shapeB = b * rotB.Transpose();
+	idQuat q;
+	q.Slerp( rotA.ToQuat(), rotB.ToQuat(), frac );
+	const idMat3 shape = shapeA + ( shapeB - shapeA ) * frac;
+	return shape * q.ToMat3();
 }
 
 /*
