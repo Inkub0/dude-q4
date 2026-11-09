@@ -1805,6 +1805,26 @@ void idEntity::PresentInterpolated( float frac ) {
 
 /*
 ================
+idEntity::GetRenderedTransform
+
+DUDE: com_interpolate: where this rendered frame draws the entity - PresentInterpolated's blend while
+Draw interpolates, else the tic transform. Recomputed from the same snapshots, so it matches.
+================
+*/
+void idEntity::GetRenderedTransform( idVec3 &origin, idMat3 &axis ) const {
+	const float frac = gameLocal.renderInterpolateFrac;
+	if ( frac < 1.0f && modelDefHandle != -1 && renderInterpSnapshotTime == gameLocal.time
+			&& !( renderInterpOriginCur.Compare( renderInterpOriginPrev ) && renderInterpAxisCur.Compare( renderInterpAxisPrev ) ) ) {
+		RenderInterpBlendTransform( renderInterpOriginPrev2, renderInterpOriginPrev, renderInterpOriginCur,
+			renderInterpAxisPrev, renderInterpAxisCur, renderInterpHistCount, frac, origin, axis );
+		return;
+	}
+	origin = renderEntity.origin;
+	axis = renderEntity.axis;
+}
+
+/*
+================
 idEntity::RestoreRenderTransform
 
 DUDE: re-commits the authoritative tic-state transform after PresentInterpolated dirtied the render def

@@ -3939,6 +3939,8 @@ bool idGameLocal::Draw( int clientNum ) {
 	// game tics): nudge the cached render view, the view model and the world entities that moved this
 	// tic toward the current sub-tic time, so motion is smooth when rendering faster than the tics.
 	// Not for demo playback (its own view smoothing) or g_stopTime (time stands still).
+	renderView_t *interpView = NULL;
+	int interpViewTicTime = 0;
 	if ( cvarSystem->GetCVarBool( "com_interpolate" ) && GetDemoState() == DEMO_NONE && !g_stopTime.GetBool()
 			&& !( inCinematic && skipCinematic ) ) {
 		float frac = common->GetTicInterpolation();
@@ -3950,8 +3952,18 @@ bool idGameLocal::Draw( int clientNum ) {
 		player->InterpolateRenderView( frac );
 		player->InterpolateViewWeapon( frac );
 		// world entities that moved this tic (movers, doors, monsters, projectiles, vehicles, moving
-		// lights, client models) glide between their previous and current tic transforms
+		// lights, client models, effects) glide between their previous and current tic transforms
 		InterpolateRenderEntities( frac );
+
+		// and the scene is drawn at the same instant: effects' particles, animated materials and surface
+		// GUIs are evaluated at the view's time, which would otherwise stay the tic's and step at 60 Hz
+		// while everything around them glides. Never past the tic (no extrapolation); restored after
+		// rendering, so game code only ever sees tic times.
+		interpView = player->GetRenderView();
+		if ( interpView ) {
+			interpViewTicTime = interpView->time;
+			interpView->time -= (int)( ( 1.0f - frac ) * (float)( time - previousTime ) );
+		}
 	}
 
 // RAVEN BEGIN
@@ -3967,6 +3979,10 @@ bool idGameLocal::Draw( int clientNum ) {
 // RAVEN END
 	// render the scene
 	player->playerView.RenderPlayerView( player->hud );
+
+	if ( interpView ) {
+		interpView->time = interpViewTicTime;	// DUDE: com_interpolate, see above
+	}
 
 	// DUDE: done rendering: anything that issues a render callback before the next rendered frame (the
 	// game tics, e.g. a trace against an animated model) gets the exact tic pose, not this frame's

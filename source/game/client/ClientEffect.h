@@ -17,6 +17,7 @@ public:
 	virtual ~rvClientEffect( void );
 
 	virtual void		Think			( void );
+	virtual void		PresentInterpolated	( float frac );		// DUDE: com_interpolate
 	virtual void		DrawDebugInfo	( void ) const;
 	virtual void		FreeEntityDef	( void );
 	virtual void		UpdateBind		( void );
@@ -48,10 +49,17 @@ protected:
 
 	void				Init			( const idDecl *effect );
 	void				FreeEffectDef	( void );
+	void				SnapshotEffectTransform	( void );	// DUDE: com_interpolate
 
 	renderEffect_t		renderEffect;
 	int					effectDefHandle;
 	jointHandle_t		endOriginJoint;
+
+	// DUDE: com_interpolate: the bind master's render transform when this tic's effect was placed, so a
+	// bound effect can follow the master where it is drawn between tics (not saved)
+	idVec3				renderInterpMasterOrigin;
+	idMat3				renderInterpMasterAxis;
+	bool				renderInterpBound;
 };
 
 ID_INLINE void rvClientEffect::SetEndOrigin	( const idVec3& endOrigin ) {

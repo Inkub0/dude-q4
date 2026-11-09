@@ -241,6 +241,9 @@ public:
 	virtual void			Present( void );
 	virtual void			PresentInterpolated( float frac );		// DUDE: com_interpolate, see SnapshotRenderTransform()
 	virtual void			RestoreRenderTransform( void );			// DUDE: re-commit the authoritative tic transform after interpolation
+							// DUDE: com_interpolate: the render transform this rendered frame draws (the tic's, when not
+							// interpolated); what effects bound to the entity follow
+	virtual void			GetRenderedTransform( idVec3 &origin, idMat3 &axis ) const;
 	// instance visuals
 	virtual void			InstanceJoin( void );
 	virtual void			InstanceLeave( void );

@@ -44,6 +44,9 @@ void rvClientEffect::Init ( const idDecl *effect ) {
 	renderEffect.referenceSoundHandle = -1;
 	effectDefHandle = -1;
 	endOriginJoint	= INVALID_JOINT;
+	renderInterpMasterOrigin.Zero();	// DUDE: com_interpolate
+	renderInterpMasterAxis.Identity();
+	renderInterpBound = false;
 }
 
 /*
@@ -174,6 +177,8 @@ void rvClientEffect::Think ( void ) {
 			effectDefHandle = gameRenderWorld->AddEffectDef( &renderEffect, gameLocal.time );
 			if ( effectDefHandle < 0 ) {
 				PostEventMS( &EV_Remove, 0 );
+			} else {
+				SnapshotEffectTransform();	// DUDE: com_interpolate
 			}
 		}
 		
@@ -206,6 +211,68 @@ void rvClientEffect::Think ( void ) {
 		PostEventMS( &EV_Remove, 0 );
 		return;
 	}
+
+	SnapshotEffectTransform();	// DUDE: com_interpolate
+}
+
+/*
+================
+rvClientEffect::SnapshotEffectTransform
+
+DUDE: com_interpolate: this tic's effect transform, and its bind master's render transform, for
+PresentInterpolated.
+================
+*/
+void rvClientEffect::SnapshotEffectTransform( void ) {
+	SnapshotRenderTransform( renderEffect.origin, renderEffect.axis );
+	idEntity *master = bindMaster.GetEntity();
+	renderInterpBound = ( master != NULL );
+	if ( master ) {
+		renderInterpMasterOrigin = master->GetRenderEntity()->origin;
+		renderInterpMasterAxis = master->GetRenderEntity()->axis;
+	}
+}
+
+/*
+================
+rvClientEffect::PresentInterpolated
+
+DUDE: com_interpolate: draw the effect where its owner is drawn this rendered frame. An effect bound to
+an entity keeps its place relative to the entity's render transform, applied to where the entity is
+drawn (a muzzle flash stays on the gun the view carries, a rocket's flare on the rocket); a loose one
+blends its last two tic transforms. Drawing only: the effect spawns and moves at the tic.
+================
+*/
+void rvClientEffect::PresentInterpolated( float frac ) {
+	if ( effectDefHandle < 0 || renderInterpSnapshotTime != gameLocal.time ) {
+		return;
+	}
+
+	idVec3 origin;
+	idMat3 axis;
+	idEntity *master = bindMaster.GetEntity();
+	if ( renderInterpBound && master ) {
+		idVec3 masterOrigin;
+		idMat3 masterAxis;
+		master->GetRenderedTransform( masterOrigin, masterAxis );
+		if ( masterOrigin.Compare( renderInterpMasterOrigin ) && masterAxis.Compare( renderInterpMasterAxis ) ) {
+			return;		// the master is drawn at its tic transform
+		}
+		// the effect in the master's frame at the tic (world -> local: ( p - o ) * axis^T), onto the
+		// master as drawn (local -> world: o + p * axis)
+		const idMat3 masterAxisT = renderInterpMasterAxis.Transpose();
+		const idVec3 localOrigin = ( renderEffect.origin - renderInterpMasterOrigin ) * masterAxisT;
+		const idMat3 localAxis = renderEffect.axis * masterAxisT;
+		origin = masterOrigin + localOrigin * masterAxis;
+		axis = localAxis * masterAxis;
+	} else {
+		if ( renderInterpOriginCur.Compare( renderInterpOriginPrev ) && renderInterpAxisCur.Compare( renderInterpAxisPrev ) ) {
+			return;
+		}
+		RenderInterpBlendTransform( renderInterpOriginPrev2, renderInterpOriginPrev, renderInterpOriginCur,
+			renderInterpAxisPrev, renderInterpAxisCur, renderInterpHistCount, frac, origin, axis );
+	}
+	gameRenderWorld->SetEffectDefDrawFrame( effectDefHandle, origin, axis );
 }
 
 /*

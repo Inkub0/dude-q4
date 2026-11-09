@@ -89,6 +89,7 @@ public:
 	// the generic world-entity blend is skipped for it (it would fight the eye-relative one)
 	void					InterpolateViewWeapon		( float frac );
 	virtual void			PresentInterpolated			( float frac ) { }
+	virtual void			GetRenderedTransform		( idVec3 &origin, idMat3 &axis ) const;
 
 	// Networking
 	virtual void			WriteToSnapshot				( idBitMsgDelta &msg ) const;
@@ -129,6 +130,8 @@ private:
 	rvWeapon*	weapon;
 
 	rvEyeRelativeInterp		renderInterpView;		// DUDE: com_interpolate, see InterpolateViewWeapon
+	idVec3					renderInterpShownOrigin;	// DUDE: com_interpolate: where InterpolateViewWeapon drew it
+	idMat3					renderInterpShownAxis;
 };
 
 class rvWeapon : public idClass {

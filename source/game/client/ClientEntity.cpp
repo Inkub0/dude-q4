@@ -44,17 +44,17 @@ rvClientEntity::rvClientEntity( void ) {
 ================
 rvClientEntity::SnapshotRenderTransform
 
-DUDE: com_interpolate: called when the render def is committed with ent's transform in a tic; ages the
+DUDE: com_interpolate: called when the render def is committed with this transform in a tic; ages the
 previous/current tic snapshots once per tic (see idEntity::SnapshotRenderTransform).
 ================
 */
-void rvClientEntity::SnapshotRenderTransform( const renderEntity_t &ent ) {
+void rvClientEntity::SnapshotRenderTransform( const idVec3 &origin, const idMat3 &axis ) {
 	if ( renderInterpSnapshotTime != gameLocal.time ) {
 		if ( renderInterpSnapshotTime < 0 || renderInterpSnapshotTime != gameLocal.previousTime ) {
 			// first commit, or the def wasn't committed last tic: nothing to blend from
-			renderInterpOriginPrev2 = ent.origin;
-			renderInterpOriginPrev = ent.origin;
-			renderInterpAxisPrev = ent.axis;
+			renderInterpOriginPrev2 = origin;
+			renderInterpOriginPrev = origin;
+			renderInterpAxisPrev = axis;
 			renderInterpHistCount = 1;
 		} else {
 			renderInterpOriginPrev2 = renderInterpOriginPrev;
@@ -66,8 +66,8 @@ void rvClientEntity::SnapshotRenderTransform( const renderEntity_t &ent ) {
 		}
 		renderInterpSnapshotTime = gameLocal.time;
 	}
-	renderInterpOriginCur = ent.origin;
-	renderInterpAxisCur = ent.axis;
+	renderInterpOriginCur = origin;
+	renderInterpAxisCur = axis;
 	renderInterpApplied = false;	// the def now holds the tic transform
 
 	// don't glide across a teleport-sized jump

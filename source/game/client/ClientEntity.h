@@ -103,7 +103,7 @@ protected:
 	int							renderInterpSnapshotTime;	// gameLocal.time the Cur snapshot belongs to, -1 = none
 	bool						renderInterpApplied;		// the render def holds a sub-tic transform
 
-	void						SnapshotRenderTransform		( const renderEntity_t &ent );
+	void						SnapshotRenderTransform		( const idVec3 &origin, const idMat3 &axis );
 	void						PresentInterpolatedDef		( int defHandle, const renderEntity_t &ent, float frac );
 	void						RestoreRenderTransformDef	( int defHandle, const renderEntity_t &ent );
 };

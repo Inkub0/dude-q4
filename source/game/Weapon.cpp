@@ -356,6 +356,24 @@ void rvViewWeapon::PresentWeapon( bool showViewModel ) {
 
 /*
 ================
+rvViewWeapon::GetRenderedTransform
+
+DUDE: com_interpolate: the effects bound to the view model (muzzle flashes, beams) follow it where
+InterpolateViewWeapon drew it this frame.
+================
+*/
+void rvViewWeapon::GetRenderedTransform( idVec3 &origin, idMat3 &axis ) const {
+	if ( renderInterpView.applied && gameLocal.renderInterpolateFrac < 1.0f ) {
+		origin = renderInterpShownOrigin;
+		axis = renderInterpShownAxis;
+		return;
+	}
+	origin = renderEntity.origin;
+	axis = renderEntity.axis;
+}
+
+/*
+================
 rvEyeRelativeInterp
 
 DUDE: com_interpolate, see Weapon.h
@@ -441,6 +459,8 @@ void rvViewWeapon::InterpolateViewWeapon( float frac ) {
 		if ( active && renderInterpView.Blend( frac, rv->vieworg, rv->viewaxis, lerped.origin, lerped.axis ) ) {
 			gameRenderWorld->UpdateEntityDef( modelDefHandle, &lerped );
 			renderInterpView.applied = true;
+			renderInterpShownOrigin = lerped.origin;
+			renderInterpShownAxis = lerped.axis;
 		} else if ( renderInterpView.applied ) {
 			// not following the view this frame: back to the tic transform
 			gameRenderWorld->UpdateEntityDef( modelDefHandle, &renderEntity );
