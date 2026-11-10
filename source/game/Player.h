@@ -29,6 +29,7 @@ extern const idEventDef EV_Player_SetExtraProjPassEntity;
 extern const idEventDef EV_Player_DamageEffect;
 
 const float THIRD_PERSON_FOCUS_DISTANCE	= 512.0f;
+const float THIRD_PERSON_AIM_DISTANCE	= 8192.0f;	// DUDE: the crosshair's aim trace (ThirdPersonCrosshairOffset); a miss projects its far end
 const int	LAND_DEFLECT_TIME			= 150;
 const int	LAND_RETURN_TIME			= 300;
 const int	FOCUS_TIME					= 200;
@@ -443,10 +444,16 @@ public:
 	idAngles				renderViewOffsetViewAnglesPrev;	// previous tic
 	float					renderViewOffsetAngle;			// OffsetThirdPersonView params for this tic's mode
 	float					renderViewOffsetHeight;
+	float					renderViewOffsetSide;			// pm_thirdPersonSide (0 for the death cam)
 	bool					renderViewOffsetClip;
 	float					renderViewOffsetRange;			// lerped between tics (the death cam ramps it)
 	float					renderViewOffsetRangePrev;
 	float					renderViewOffsetFovX;			// final aspect-corrected fov, lerped directly
+	// DUDE third person: the eye and axis the shots leave along, for this rendered frame -- the tic's
+	// firstPersonViewOrigin / firstPersonViewAxis, moved with the orbit by InterpolateRenderView so the
+	// crosshair (ThirdPersonCrosshairOffset) tracks the camera within the tic
+	idVec3					renderViewAimOrigin;
+	idMat3					renderViewAimAxis;
 	float					renderViewOffsetFovXPrev;
 	float					renderViewOffsetFovY;
 	float					renderViewOffsetFovYPrev;
@@ -557,7 +564,9 @@ public:
 	void					InterpolateViewWeapon( float frac );	// DUDE: com_interpolate, the view model follows the interpolated view
 	
 	void					DrawShadow( renderEntity_t *headRenderEnt );
-	void					DrawHUD( idUserInterface *hud );
+	// DUDE: view is the frame's rendered view (the crosshair projects on it in third person)
+	void					DrawHUD( idUserInterface *hud, const renderView_t *view );
+	bool					ThirdPersonCrosshairOffset( const renderView_t *view, float &x, float &y ) const;
 	void					StartRadioChatter ( void );
 	void					StopRadioChatter ( void );
 
@@ -571,10 +580,10 @@ public:
 	// false when the view isn't that additive sum (dead, in a vehicle). Calls the random screen shake
 	// once, exactly like GetViewPos.
 	bool					GetViewPosEffects( idVec3 &origin, idMat3 &axis, idAngles &effectAngles ) const;
- 	void					OffsetThirdPersonView( float angle, float range, float height, bool clip );
+ 	void					OffsetThirdPersonView( float angle, float range, float height, float side, bool clip );
 	// DUDE: com_interpolate: pure third-person view builder shared by the per-tic OffsetThirdPersonView
 	// and the per-frame re-derivation in InterpolateRenderView
-	void					ComputeThirdPersonView( const idVec3 &eyeOrigin, const idAngles &viewAng, const idMat3 &gravityAxis, float angle, float range, float height, bool clip );
+	void					ComputeThirdPersonView( const idVec3 &eyeOrigin, const idAngles &viewAng, const idMat3 &gravityAxis, float angle, float range, float height, float side, bool clip );
 // RAVEN BEGIN
 // jnewquist: option to avoid clipping against world
 	void					OffsetThirdPersonVehicleView	( bool clip );

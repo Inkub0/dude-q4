@@ -515,22 +515,26 @@ void idPlayerView::SingleView( idUserInterface *hud, const renderView_t *view, i
 	}
 
 	// draw screen blobs
-	if ( !pm_thirdPerson.GetBool() && !g_skipViewEffects.GetBool() ) {
-		for ( int i = 0 ; i < MAX_SCREEN_BLOBS ; i++ ) {
-			screenBlob_t	*blob = &screenBlobs[i];
-			if ( blob->finishTime <= gameLocal.time ) {
-				continue;
-			}
+	if ( !g_skipViewEffects.GetBool() ) {
+		// DUDE: third person draws the HUD and the full-screen feedback like first person does; only
+		// the blood blobs stay first-person -- they are splashes on the eye, and the camera is not there
+		if ( !pm_thirdPerson.GetBool() ) {
+			for ( int i = 0 ; i < MAX_SCREEN_BLOBS ; i++ ) {
+				screenBlob_t	*blob = &screenBlobs[i];
+				if ( blob->finishTime <= gameLocal.time ) {
+					continue;
+				}
 			
-			blob->y += blob->driftAmount;
+				blob->y += blob->driftAmount;
 
-			float	fade = (float)( blob->finishTime - gameLocal.time ) / ( blob->finishTime - blob->startFadeTime );
-			if ( fade > 1.0f ) {
-				fade = 1.0f;
-			}
-			if ( fade ) {
-				renderSystem->SetColor4( 1,1,1,fade );
-				renderSystem->DrawStretchPic( blob->x, blob->y, blob->w, blob->h,blob->s1, blob->t1, blob->s2, blob->t2, blob->material );
+				float	fade = (float)( blob->finishTime - gameLocal.time ) / ( blob->finishTime - blob->startFadeTime );
+				if ( fade > 1.0f ) {
+					fade = 1.0f;
+				}
+				if ( fade ) {
+					renderSystem->SetColor4( 1,1,1,fade );
+					renderSystem->DrawStretchPic( blob->x, blob->y, blob->w, blob->h,blob->s1, blob->t1, blob->s2, blob->t2, blob->material );
+				}
 			}
 		}
 
@@ -540,7 +544,7 @@ void idPlayerView::SingleView( idUserInterface *hud, const renderView_t *view, i
 			renderSystem->DrawStretchPic( 0.0f, 0.0f, 640.0f, 480.0f, 0.0f, 0.0f, 1.0f, 1.0f, tunnelMaterial );
 		}
 
-		player->DrawHUD( hud );
+		player->DrawHUD( hud, view );
 
 			
 /*

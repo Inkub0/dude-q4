@@ -1170,7 +1170,10 @@ idPlayer::idPlayer() {
 	renderViewOffsetViewAngles.Zero();
 	renderViewOffsetViewAnglesPrev.Zero();
 	renderViewOffsetAngle		= 0.0f;
+	renderViewAimOrigin.Zero();
+	renderViewAimAxis.Identity();
 	renderViewOffsetHeight		= 0.0f;
+	renderViewOffsetSide		= 0.0f;
 	renderViewOffsetClip		= false;
 	renderViewOffsetRange		= 0.0f;
 	renderViewOffsetRangePrev	= 0.0f;
@@ -3644,6 +3647,13 @@ void idPlayer::DrawShadow( renderEntity_t *headRenderEnt ) {
  			headRenderEnt->suppressShadowInViewID = entityNumber+1;
    		}
 	}
+	// DUDE: in third person the body is a character in the scene like any other -- it casts its shadow,
+	// shadows itself and takes the world's shadows (noSelfShadow lifts an entity out of the last two).
+	// First person keeps the stock flag, which keeps the body's shadow off the view weapon.
+	renderEntity.noSelfShadow = !pm_thirdPerson.GetBool();
+	if ( headRenderEnt ) {
+		headRenderEnt->noSelfShadow = renderEntity.noSelfShadow;
+	}
 }
 
 /*
@@ -3651,7 +3661,7 @@ void idPlayer::DrawShadow( renderEntity_t *headRenderEnt ) {
 idPlayer::DrawHUD
 ===============
 */
-void idPlayer::DrawHUD( idUserInterface *_hud ) {
+void idPlayer::DrawHUD( idUserInterface *_hud, const renderView_t *view ) {
 	idUserInterface * cursor = idPlayer::cursor;
  
 	if ( !gameLocal.GetLocalPlayer() ) {
@@ -3719,6 +3729,7 @@ void idPlayer::DrawHUD( idUserInterface *_hud ) {
 				cursor->SetStateInt( "g_crosshairSize", crossSize );
 				cursor->SetStateBool( "vehiclecursor", true );
 
+				cursor->SetDrawOffset( 0.0f, 0.0f );	// DUDE: the vehicle crosshair is Raven's own, at its stock place
 				vehicleController.UpdateCursorGUI( cursor );
 				cursor->Redraw( gameLocal.time );
 			}
@@ -3759,6 +3770,10 @@ void idPlayer::DrawHUD( idUserInterface *_hud ) {
 // mekberg: removed check for weapon->ShowCrosshair.
 //			we want to show the crosshair regardless for NPC tags
 			if ( cursor && health > 0 ) {		
+				// DUDE: in third person the crosshair sits where the shots land, not at the screen centre
+				float crossX, crossY;
+				ThirdPersonCrosshairOffset( view, crossX, crossY );
+				cursor->SetDrawOffset( crossX, crossY );
 				// Pass the current weapon to the cursor gui for custom crosshairs
 // mekberg: adjustable crosshair size.
 				int crossSize = cvarSystem->GetCVarInteger( "g_crosshairSize" );
@@ -10808,7 +10823,7 @@ against the current collision world, which lets the interpolated camera re-fit t
 frame. Body is Raven's OffsetThirdPersonView.
 ===============
 */
-void idPlayer::ComputeThirdPersonView( const idVec3 &eyeOrigin, const idAngles &viewAng, const idMat3 &gravityAxis, float angle, float range, float height, bool clip ) {
+void idPlayer::ComputeThirdPersonView( const idVec3 &eyeOrigin, const idAngles &viewAng, const idMat3 &gravityAxis, float angle, float range, float height, float side, bool clip ) {
 	idVec3			view;
 	idVec3			focusAngles;
 	trace_t			trace;
@@ -10844,6 +10859,15 @@ void idPlayer::ComputeThirdPersonView( const idVec3 &eyeOrigin, const idAngles &
 	idMath::SinCos( DEG2RAD( angle ), sideScale, forwardScale );
 	view -= range * forwardScale * renderView->viewaxis[ 0 ];
 	view += range * sideScale * renderView->viewaxis[ 1 ];
+
+	// DUDE: over-the-shoulder framing (pm_thirdPersonSide). Slide the camera AND its focus point
+	// sideways together -- viewaxis[1] points left, so a positive side puts the camera off the right
+	// shoulder and the player on the left of the screen -- which keeps the view parallel to the aim
+	// instead of swinging it back toward the player: the body no longer covers what is ahead, and
+	// the crosshair (ThirdPersonCrosshairOffset) still lands where the shots go. The wall trace
+	// below runs from the eye to the shifted camera, so it is pulled in like the stock one.
+	view -= side * renderView->viewaxis[ 1 ];
+	focusPoint -= side * renderView->viewaxis[ 1 ];
 
  	if ( clip ) {
  		// trace a ray from the origin to the viewpoint to make sure the view isn't
@@ -10888,15 +10912,56 @@ void idPlayer::ComputeThirdPersonView( const idVec3 &eyeOrigin, const idAngles &
 
 /*
 ===============
+idPlayer::ThirdPersonCrosshairOffset
+
+DUDE: in third person the camera orbits behind (pm_thirdPersonAngle: around) the player, so the
+screen centre is not where the shots go. Shots leave the eye along the view axis (rvWeapon fires
+from playerViewOrigin along playerViewAxis), so trace that ray as a shot would, project the hit on
+the frame's render view and give the crosshair GUI's offset from the screen centre, in virtual
+640x480 units (idUserInterface::SetDrawOffset). 0, 0 -- the stock centre -- outside third person,
+in a vehicle (its own crosshair, Raven's) and when the aim point is behind the camera (an orbit
+angle near 180). The eye and axis are the frame's (renderViewAimOrigin / renderViewAimAxis),
+carried along with the orbit by InterpolateRenderView, so the crosshair never trails the camera
+within a tic. Ported from DUDE's Doom 3 game (idPlayer::ThirdPersonCrosshairOffset).
+===============
+*/
+bool idPlayer::ThirdPersonCrosshairOffset( const renderView_t *view, float &x, float &y ) const {
+	x = 0.0f;
+	y = 0.0f;
+	if ( !view || !pm_thirdPerson.GetBool() || IsInVehicle() ) {
+		return false;
+	}
+
+	trace_t tr;
+	const idVec3 start = renderViewAimOrigin;
+	const idVec3 end = start + renderViewAimAxis[0] * THIRD_PERSON_AIM_DISTANCE;
+	gameLocal.TracePoint( this, tr, start, end, MASK_SHOT_RENDERMODEL, this );
+
+	// project on the rendered view: the depth along the camera's forward, then the half-fov
+	// tangents take the side offsets to normalized device coordinates (what R_SetupProjection does)
+	const idVec3 rel = tr.endpos - view->vieworg;
+	const float depth = rel * view->viewaxis[0];
+	if ( depth < 1.0f ) {
+		return false;
+	}
+	const float ndcX = -( rel * view->viewaxis[1] ) / ( depth * idMath::Tan( DEG2RAD( view->fov_x * 0.5f ) ) );
+	const float ndcY =  ( rel * view->viewaxis[2] ) / ( depth * idMath::Tan( DEG2RAD( view->fov_y * 0.5f ) ) );
+	x = ndcX * ( SCREEN_WIDTH * 0.5f );
+	y = -ndcY * ( SCREEN_HEIGHT * 0.5f );
+	return true;
+}
+
+/*
+===============
 idPlayer::OffsetThirdPersonView
 ===============
 */
-void idPlayer::OffsetThirdPersonView( float angle, float range, float height, bool clip ) {
+void idPlayer::OffsetThirdPersonView( float angle, float range, float height, float side, bool clip ) {
 	idVec3			origin;
 	idMat3			axis;
 
 	GetViewPos( origin, axis );
-	ComputeThirdPersonView( origin, viewAngles, physicsObj.GetGravityAxis(), angle, range, height, clip );
+	ComputeThirdPersonView( origin, viewAngles, physicsObj.GetGravityAxis(), angle, range, height, side, clip );
 }
 
 /*
@@ -11133,6 +11198,10 @@ void idPlayer::CalculateRenderView( void ) {
 	}
 	memset( renderView, 0, sizeof( *renderView ) );
 
+	// DUDE: the aim the third-person crosshair follows this tic (InterpolateRenderView moves it per frame)
+	renderViewAimOrigin = firstPersonViewOrigin;
+	renderViewAimAxis = firstPersonViewAxis;
+
 	// copy global shader parms
 	for( i = 0; i < MAX_GLOBAL_SHADER_PARMS; i++ ) {
 		renderView->shaderParms[ i ] = gameLocal.globalShaderParms[ i ];
@@ -11232,18 +11301,20 @@ void idPlayer::CalculateRenderView( void ) {
 				// DUDE: cache the OffsetThirdPersonView params so InterpolateRenderView can re-derive the orbit
 				renderViewOffsetAngle = pm_thirdPersonAngle.GetFloat();
 				renderViewOffsetHeight = pm_thirdPersonHeight.GetFloat();
+			renderViewOffsetSide = pm_thirdPersonSide.GetFloat();
 				renderViewOffsetClip = pm_thirdPersonClip.GetBool();
 				offsetRange = pm_thirdPersonRange.GetFloat();
-				OffsetThirdPersonView( renderViewOffsetAngle, offsetRange, renderViewOffsetHeight, renderViewOffsetClip );
+				OffsetThirdPersonView( renderViewOffsetAngle, offsetRange, renderViewOffsetHeight, renderViewOffsetSide, renderViewOffsetClip );
 				SmoothenRenderView( false );
 				renderViewOffsetInterpolatable = true;
 			} else if ( pm_thirdPersonDeath.GetBool() ) {
 				range = gameLocal.time < minRespawnTime ? ( gameLocal.time + RAGDOLL_DEATH_TIME - minRespawnTime ) * ( 120.0f / RAGDOLL_DEATH_TIME ) : 120.0f;
 				renderViewOffsetAngle = 0.0f;	// DUDE: see above
 				renderViewOffsetHeight = 0.0f;
+			renderViewOffsetSide = 0.0f;
 				renderViewOffsetClip = false;
 				offsetRange = 20.0f + range;
-	 			OffsetThirdPersonView( 0.0f, offsetRange, 0.0f, false );
+	 			OffsetThirdPersonView( 0.0f, offsetRange, 0.0f, 0.0f, false );
 				SmoothenRenderView( false );
 				renderViewOffsetInterpolatable = true;
 			} else {
@@ -11382,7 +11453,22 @@ void idPlayer::InterpolateRenderView( float frac ) {
 		}
 
 		const float rng = renderViewOffsetRangePrev + frac * ( renderViewOffsetRange - renderViewOffsetRangePrev );
-		ComputeThirdPersonView( eye, ang, physicsObj.GetGravityAxis(), renderViewOffsetAngle, rng, renderViewOffsetHeight, renderViewOffsetClip );
+		ComputeThirdPersonView( eye, ang, physicsObj.GetGravityAxis(), renderViewOffsetAngle, rng, renderViewOffsetHeight, renderViewOffsetSide, renderViewOffsetClip );
+
+		// the crosshair's aim ray (ThirdPersonCrosshairOffset) gets the same frame-time eye and the same
+		// angle adjustment the orbit just got, else it trails the camera by up to a tic and jitters while
+		// turning. The shot axis itself keeps its bob and kick (firstPersonViewAxis), only the delta is added.
+		renderViewAimOrigin = eye;
+		idAngles aimDelta = ang - viewAngles;
+		aimDelta.Normalize180();
+		if ( aimDelta.yaw != 0.0f || aimDelta.pitch != 0.0f ) {
+			idAngles aimAng = firstPersonViewAxis.ToAngles();
+			aimAng.yaw += aimDelta.yaw;
+			aimAng.pitch += aimDelta.pitch;
+			renderViewAimAxis = aimAng.ToMat3();
+		} else {
+			renderViewAimAxis = firstPersonViewAxis;
+		}
 
 		renderView->fov_x = renderViewOffsetFovXPrev + frac * ( renderViewOffsetFovX - renderViewOffsetFovXPrev );
 		renderView->fov_y = renderViewOffsetFovYPrev + frac * ( renderViewOffsetFovY - renderViewOffsetFovYPrev );
