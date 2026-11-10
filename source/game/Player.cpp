@@ -1173,6 +1173,7 @@ idPlayer::idPlayer() {
 	renderViewAimOrigin.Zero();
 	renderViewAimAxis.Identity();
 	renderViewOffsetHeight		= 0.0f;
+	renderViewOffsetSide		= 0.0f;
 	renderViewOffsetClip		= false;
 	renderViewOffsetRange		= 0.0f;
 	renderViewOffsetRangePrev	= 0.0f;
@@ -10822,7 +10823,7 @@ against the current collision world, which lets the interpolated camera re-fit t
 frame. Body is Raven's OffsetThirdPersonView.
 ===============
 */
-void idPlayer::ComputeThirdPersonView( const idVec3 &eyeOrigin, const idAngles &viewAng, const idMat3 &gravityAxis, float angle, float range, float height, bool clip ) {
+void idPlayer::ComputeThirdPersonView( const idVec3 &eyeOrigin, const idAngles &viewAng, const idMat3 &gravityAxis, float angle, float range, float height, float side, bool clip ) {
 	idVec3			view;
 	idVec3			focusAngles;
 	trace_t			trace;
@@ -10858,6 +10859,15 @@ void idPlayer::ComputeThirdPersonView( const idVec3 &eyeOrigin, const idAngles &
 	idMath::SinCos( DEG2RAD( angle ), sideScale, forwardScale );
 	view -= range * forwardScale * renderView->viewaxis[ 0 ];
 	view += range * sideScale * renderView->viewaxis[ 1 ];
+
+	// DUDE: over-the-shoulder framing (pm_thirdPersonSide). Slide the camera AND its focus point
+	// sideways together -- viewaxis[1] points left, so a positive side puts the camera off the right
+	// shoulder and the player on the left of the screen -- which keeps the view parallel to the aim
+	// instead of swinging it back toward the player: the body no longer covers what is ahead, and
+	// the crosshair (ThirdPersonCrosshairOffset) still lands where the shots go. The wall trace
+	// below runs from the eye to the shifted camera, so it is pulled in like the stock one.
+	view -= side * renderView->viewaxis[ 1 ];
+	focusPoint -= side * renderView->viewaxis[ 1 ];
 
  	if ( clip ) {
  		// trace a ray from the origin to the viewpoint to make sure the view isn't
@@ -10946,12 +10956,12 @@ bool idPlayer::ThirdPersonCrosshairOffset( const renderView_t *view, float &x, f
 idPlayer::OffsetThirdPersonView
 ===============
 */
-void idPlayer::OffsetThirdPersonView( float angle, float range, float height, bool clip ) {
+void idPlayer::OffsetThirdPersonView( float angle, float range, float height, float side, bool clip ) {
 	idVec3			origin;
 	idMat3			axis;
 
 	GetViewPos( origin, axis );
-	ComputeThirdPersonView( origin, viewAngles, physicsObj.GetGravityAxis(), angle, range, height, clip );
+	ComputeThirdPersonView( origin, viewAngles, physicsObj.GetGravityAxis(), angle, range, height, side, clip );
 }
 
 /*
@@ -11291,18 +11301,20 @@ void idPlayer::CalculateRenderView( void ) {
 				// DUDE: cache the OffsetThirdPersonView params so InterpolateRenderView can re-derive the orbit
 				renderViewOffsetAngle = pm_thirdPersonAngle.GetFloat();
 				renderViewOffsetHeight = pm_thirdPersonHeight.GetFloat();
+			renderViewOffsetSide = pm_thirdPersonSide.GetFloat();
 				renderViewOffsetClip = pm_thirdPersonClip.GetBool();
 				offsetRange = pm_thirdPersonRange.GetFloat();
-				OffsetThirdPersonView( renderViewOffsetAngle, offsetRange, renderViewOffsetHeight, renderViewOffsetClip );
+				OffsetThirdPersonView( renderViewOffsetAngle, offsetRange, renderViewOffsetHeight, renderViewOffsetSide, renderViewOffsetClip );
 				SmoothenRenderView( false );
 				renderViewOffsetInterpolatable = true;
 			} else if ( pm_thirdPersonDeath.GetBool() ) {
 				range = gameLocal.time < minRespawnTime ? ( gameLocal.time + RAGDOLL_DEATH_TIME - minRespawnTime ) * ( 120.0f / RAGDOLL_DEATH_TIME ) : 120.0f;
 				renderViewOffsetAngle = 0.0f;	// DUDE: see above
 				renderViewOffsetHeight = 0.0f;
+			renderViewOffsetSide = 0.0f;
 				renderViewOffsetClip = false;
 				offsetRange = 20.0f + range;
-	 			OffsetThirdPersonView( 0.0f, offsetRange, 0.0f, false );
+	 			OffsetThirdPersonView( 0.0f, offsetRange, 0.0f, 0.0f, false );
 				SmoothenRenderView( false );
 				renderViewOffsetInterpolatable = true;
 			} else {
@@ -11441,7 +11453,7 @@ void idPlayer::InterpolateRenderView( float frac ) {
 		}
 
 		const float rng = renderViewOffsetRangePrev + frac * ( renderViewOffsetRange - renderViewOffsetRangePrev );
-		ComputeThirdPersonView( eye, ang, physicsObj.GetGravityAxis(), renderViewOffsetAngle, rng, renderViewOffsetHeight, renderViewOffsetClip );
+		ComputeThirdPersonView( eye, ang, physicsObj.GetGravityAxis(), renderViewOffsetAngle, rng, renderViewOffsetHeight, renderViewOffsetSide, renderViewOffsetClip );
 
 		// the crosshair's aim ray (ThirdPersonCrosshairOffset) gets the same frame-time eye and the same
 		// angle adjustment the orbit just got, else it trails the camera by up to a tic and jitters while

@@ -444,6 +444,7 @@ public:
 	idAngles				renderViewOffsetViewAnglesPrev;	// previous tic
 	float					renderViewOffsetAngle;			// OffsetThirdPersonView params for this tic's mode
 	float					renderViewOffsetHeight;
+	float					renderViewOffsetSide;			// pm_thirdPersonSide (0 for the death cam)
 	bool					renderViewOffsetClip;
 	float					renderViewOffsetRange;			// lerped between tics (the death cam ramps it)
 	float					renderViewOffsetRangePrev;
@@ -579,10 +580,10 @@ public:
 	// false when the view isn't that additive sum (dead, in a vehicle). Calls the random screen shake
 	// once, exactly like GetViewPos.
 	bool					GetViewPosEffects( idVec3 &origin, idMat3 &axis, idAngles &effectAngles ) const;
- 	void					OffsetThirdPersonView( float angle, float range, float height, bool clip );
+ 	void					OffsetThirdPersonView( float angle, float range, float height, float side, bool clip );
 	// DUDE: com_interpolate: pure third-person view builder shared by the per-tic OffsetThirdPersonView
 	// and the per-frame re-derivation in InterpolateRenderView
-	void					ComputeThirdPersonView( const idVec3 &eyeOrigin, const idAngles &viewAng, const idMat3 &gravityAxis, float angle, float range, float height, bool clip );
+	void					ComputeThirdPersonView( const idVec3 &eyeOrigin, const idAngles &viewAng, const idMat3 &gravityAxis, float angle, float range, float height, float side, bool clip );
 // RAVEN BEGIN
 // jnewquist: option to avoid clipping against world
 	void					OffsetThirdPersonVehicleView	( bool clip );
