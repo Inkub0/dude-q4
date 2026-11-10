@@ -11280,7 +11280,9 @@ void idPlayer::CalculateRenderView( void ) {
 
 		// First try out any camera views that can possibly fail.
 		if( !cameraIsSet ){
-			if ( g_stopTime.GetBool() ) {
+						// DUDE: the stopped-time view (g_stopTime: the F10 settings menu pauses the game with it) keeps
+			// the third-person orbit below; stock forced first person here, so opening the menu switched views
+			if ( g_stopTime.GetBool() && !pm_thirdPerson.GetBool() ) {
 	 			renderView->vieworg = firstPersonViewOrigin;
 	 			renderView->viewaxis = firstPersonViewAxis;
 				SmoothenRenderView( true );
