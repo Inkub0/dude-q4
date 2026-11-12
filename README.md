@@ -36,8 +36,8 @@ idlib; the result goes next to `build/dude`, where DUDE looks for it when it run
 Linux:
 
 ```
-git clone --branch v0.9.8 https://github.com/Inkub0/dude.git
-git clone --branch v0.9.8 https://github.com/Inkub0/dude-q4.git
+git clone --branch v0.9.9 https://github.com/Inkub0/dude.git
+git clone --branch v0.9.9 https://github.com/Inkub0/dude-q4.git
 cd dude
 ./build.sh --vulkan                                   # DUDE first (dependencies: DUDE's README.md)
 Q4GAME_DIR=../dude-q4 tools/quake4/build-q4game.sh    # -> build/q4base.so
